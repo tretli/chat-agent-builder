@@ -1,3 +1,5 @@
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
 # Angular build output
 /dist
 /tmp
@@ -6,6 +8,8 @@
 
 # Dependencies
 /node_modules
+npm-debug.log
+yarn-error.log
 
 # Angular cache
 /.angular/cache
@@ -25,9 +29,10 @@ testem.log
 # Optional generated artifacts
 /typings
 .sass-cache/
+__screenshots__/
 
 # IDEs and editors
-/.idea
+.idea/
 .project
 .classpath
 .c9/
@@ -41,6 +46,7 @@ testem.log
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+!.vscode/mcp.json
 .history/*
 
 # OS files
