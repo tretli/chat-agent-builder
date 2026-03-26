@@ -1,0 +1,48 @@
+# Angular build output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Dependencies
+/node_modules
+
+# Angular cache
+/.angular/cache
+
+# Test and coverage output
+/coverage
+
+# Profiling files
+chrome-profiler-events*.json
+speed-measure-plugin*.json
+
+# Logs and misc runtime files
+/connect.lock
+/libpeerconnection.log
+testem.log
+
+# Optional generated artifacts
+/typings
+.sass-cache/
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# OS files
+.DS_Store
+Thumbs.db
