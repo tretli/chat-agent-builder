@@ -92,29 +92,14 @@ describe('App', () => {
     expect(host.textContent).toContain('High-intent conversations');
   });
 
-  it('updates node position while dragging', () => {
+  it('updates node position while dragging and does not start a connection drag', () => {
     clickByTestId('add-start-node');
 
     const node = app.flow().nodes[0];
 
-    app.beginDrag(
-      {
-        clientX: 120,
-        clientY: 120,
-        pointerId: 1
-      },
-      node.id
-    );
-    app.onCanvasPointerMove({
-      clientX: 260,
-      clientY: 300,
-      pointerId: 1
-    });
-    app.onCanvasPointerUp({
-      clientX: 260,
-      clientY: 300,
-      pointerId: 1
-    });
+    app.beginNodeDrag(createPointerEvent(120, 120, 1), node.id);
+    app.onWindowPointerMove(createPointerEvent(260, 300, 1));
+    app.onWindowPointerUp(createPointerEvent(260, 300, 1));
     fixture.detectChanges();
 
     const updatedNode = app.flow().nodes[0];
@@ -122,9 +107,11 @@ describe('App', () => {
       x: 236,
       y: 268
     });
+    expect(app.connectionDrag()).toBeNull();
+    expect(app.flow().edges.length).toBe(0);
   });
 
-  it('creates valid connections and rejects invalid second connections', () => {
+  it('keeps click-to-connect as a fallback', () => {
     clickByTestId('add-start-node');
     clickByTestId('add-collect-node');
     clickByTestId('add-route-node');
@@ -147,6 +134,83 @@ describe('App', () => {
 
     expect(app.flow().edges.length).toBe(1);
     expect(app.notice().text).toContain('already has an outgoing connection');
+  });
+
+  it('creates a connection by dragging from the output handle to the target node card', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-collect-node');
+
+    const [startNode, collectNode] = app.flow().nodes;
+
+    app.beginConnectionDrag(createPointerEvent(110, 110, 7), startNode.id);
+    app.onWindowPointerMove(createPointerEvent(220, 240, 7));
+    fixture.detectChanges();
+
+    expect(app.previewEdgePath()).not.toBeNull();
+    expect(getByTestId('preview-edge')).not.toBeNull();
+
+    app.handleNodeConnectionPointerEnter(collectNode.id);
+    app.handleNodeConnectionPointerUp(collectNode.id, createPointerEvent(220, 240, 7));
+    fixture.detectChanges();
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: startNode.id,
+        targetNodeId: collectNode.id
+      }
+    ]);
+    expect(app.edgePaths()[0]?.path).toBe('M 344 166 C 380 166, 380 166, 416 166');
+    expect(app.connectionDrag()).toBeNull();
+    expect(app.notice().text).toContain('Nodes connected');
+  });
+
+  it('cancels a dragged connection when released away from a valid target', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-collect-node');
+
+    const startNode = app.flow().nodes[0];
+
+    app.beginConnectionDrag(createPointerEvent(110, 110, 8), startNode.id);
+    app.onWindowPointerMove(createPointerEvent(380, 420, 8));
+    app.onWindowPointerUp(createPointerEvent(380, 420, 8));
+    fixture.detectChanges();
+
+    expect(app.flow().edges.length).toBe(0);
+    expect(app.connectionDrag()).toBeNull();
+    expect(app.notice().text).toContain('Connection drag cancelled');
+  });
+
+  it('rejects invalid dragged connections and leaves the flow unchanged', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-collect-node');
+    clickByTestId('add-route-node');
+
+    const [startNode, collectNode, routeNode] = app.flow().nodes;
+
+    clickByTestId(`output-${startNode.id}`);
+    clickByTestId(`input-${collectNode.id}`);
+    expect(app.flow().edges.length).toBe(1);
+
+    app.beginConnectionDrag(createPointerEvent(110, 110, 9), startNode.id);
+    app.onWindowPointerMove(createPointerEvent(420, 260, 9));
+    app.handleNodeConnectionPointerEnter(routeNode.id);
+    app.handleNodeConnectionPointerUp(routeNode.id, createPointerEvent(420, 260, 9));
+    fixture.detectChanges();
+
+    expect(app.flow().edges.length).toBe(1);
+    expect(app.connectionDrag()).toBeNull();
+    expect(app.notice().text).toContain('already has an outgoing connection');
+  });
+
+  it('does not render a start input handle or a route output handle', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-route-node');
+
+    const [startNode, routeNode] = app.flow().nodes;
+
+    expect(getByTestId(`input-${startNode.id}`)).toBeNull();
+    expect(getByTestId(`output-${routeNode.id}`)).toBeNull();
   });
 
   it('surfaces a missing route validation issue when no route node exists', () => {
@@ -262,5 +326,25 @@ function createFlowWithValidationProblems(): FlowDefinition {
         targetNodeId: 'collect-1'
       }
     ]
+  };
+}
+
+function createPointerEvent(
+  clientX: number,
+  clientY: number,
+  pointerId: number
+): {
+  clientX: number;
+  clientY: number;
+  pointerId: number;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+} {
+  return {
+    clientX,
+    clientY,
+    pointerId,
+    preventDefault: () => undefined,
+    stopPropagation: () => undefined
   };
 }

@@ -9,6 +9,20 @@ import {
 export const NODE_WIDTH = 248;
 export const NODE_HEIGHT = 156;
 
+export function buildEdgePath(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number
+): string {
+  const horizontalDistance = Math.abs(endX - startX);
+  const controlOffset = Math.max(32, Math.min(140, horizontalDistance / 2));
+
+  return `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${
+    endX - controlOffset
+  } ${endY}, ${endX} ${endY}`;
+}
+
 export function getNodeTitle(nodeType: FlowNodeType): string {
   switch (nodeType) {
     case 'start':

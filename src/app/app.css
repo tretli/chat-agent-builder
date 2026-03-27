@@ -227,6 +227,12 @@ select {
   opacity: 0.88;
 }
 
+.edge-preview {
+  stroke: #f28b39;
+  stroke-dasharray: none;
+  opacity: 0.96;
+}
+
 .empty-state {
   position: absolute;
   top: 50%;
@@ -277,6 +283,11 @@ select {
 .node-selected {
   border-color: #1f5f8b;
   box-shadow: 0 0 0 3px rgba(31, 95, 139, 0.16), 0 22px 40px rgba(22, 44, 69, 0.16);
+}
+
+.node-drop-target {
+  border-color: rgba(34, 138, 92, 0.56);
+  box-shadow: 0 0 0 4px rgba(34, 138, 92, 0.16), 0 22px 40px rgba(22, 44, 69, 0.16);
 }
 
 .node-invalid {
@@ -331,6 +342,10 @@ select {
   border-radius: 50%;
   background: #fff4d9;
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
 .handle-input {
@@ -344,6 +359,12 @@ select {
 .handle-pending {
   background: #f28b39;
   box-shadow: 0 0 0 8px rgba(242, 139, 57, 0.14);
+}
+
+.handle-drop-target {
+  transform: scale(1.1);
+  background: #d7f6e6;
+  box-shadow: 0 0 0 8px rgba(34, 138, 92, 0.14);
 }
 
 .node-issue {

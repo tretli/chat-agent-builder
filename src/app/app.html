@@ -75,24 +75,35 @@
       </div>
 
       <div
+        #canvasShell
         class="canvas-shell"
         data-testid="canvas-shell"
         (click)="clearCanvasSelection()"
-        (pointermove)="onCanvasPointerMove($event)"
-        (pointerup)="onCanvasPointerUp($event)"
-        (pointerleave)="onCanvasPointerUp($event)"
       >
-        <svg class="edge-layer" [attr.viewBox]="'0 0 ' + canvasWidth + ' ' + canvasHeight">
-          @for (edge of edgePaths(); track edge.id) {
-            <path class="edge-path" [attr.d]="edge.path"></path>
-          }
-        </svg>
-
         <div
           class="canvas-surface"
           [style.width.px]="canvasWidth"
           [style.height.px]="canvasHeight"
         >
+          <svg
+            class="edge-layer"
+            [attr.viewBox]="'0 0 ' + canvasWidth + ' ' + canvasHeight"
+            [attr.width]="canvasWidth"
+            [attr.height]="canvasHeight"
+          >
+            @for (edge of edgePaths(); track edge.id) {
+              <path class="edge-path" [attr.d]="edge.path"></path>
+            }
+
+            @if (previewEdgePath(); as previewPath) {
+              <path
+                class="edge-path edge-preview"
+                data-testid="preview-edge"
+                [attr.d]="previewPath"
+              ></path>
+            }
+          </svg>
+
           @if (!flow().nodes.length) {
             <div class="empty-state" data-testid="empty-canvas">
               <h3>Start with a node</h3>
@@ -109,13 +120,18 @@
               [attr.data-testid]="'node-' + node.id"
               [class.node-selected]="selectedNodeId() === node.id"
               [class.node-invalid]="hasIssuesForNode(node.id)"
+              [class.node-drop-target]="isConnectionDropTarget(node.id)"
               [style.transform]="'translate(' + node.position.x + 'px, ' + node.position.y + 'px)'"
+              (pointerenter)="handleNodeConnectionPointerEnter(node.id)"
+              (pointerleave)="handleNodeConnectionPointerLeave(node.id)"
+              (pointerup)="handleNodeConnectionPointerUp(node.id, $event)"
               (click)="selectNode(node.id); $event.stopPropagation()"
             >
               @if (canAcceptIncoming(node)) {
                 <button
                   type="button"
                   class="handle handle-input"
+                  [class.handle-drop-target]="isConnectionDropTarget(node.id)"
                   [attr.aria-label]="'Connect into ' + getNodeTitle(node.type)"
                   [attr.data-testid]="'input-' + node.id"
                   (click)="handleInputHandleClick(node.id, $event)"
@@ -130,7 +146,7 @@
                     class="drag-handle"
                     [attr.data-testid]="'drag-' + node.id"
                     aria-label="Drag node"
-                    (pointerdown)="beginDrag($event, node.id)"
+                    (pointerdown)="beginNodeDrag($event, node.id)"
                   >
                     Drag
                   </button>
@@ -148,9 +164,10 @@
                 <button
                   type="button"
                   class="handle handle-output"
-                  [class.handle-pending]="pendingConnectionSourceId() === node.id"
+                  [class.handle-pending]="isConnectionSourceActive(node.id)"
                   [attr.aria-label]="'Connect from ' + getNodeTitle(node.type)"
                   [attr.data-testid]="'output-' + node.id"
+                  (pointerdown)="beginConnectionDrag($event, node.id)"
                   (click)="handleOutputHandleClick(node.id, $event)"
                 ></button>
               }

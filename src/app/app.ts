@@ -1,18 +1,27 @@
-import { Component, computed, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  ViewChild,
+  computed,
+  signal
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MOCK_QUEUES } from './flow-builder.data';
 import {
+  CollectVariableNode,
   FlowDefinition,
   FlowEdge,
   FlowNode,
   FlowNodeType,
-  CollectVariableNode,
+  NodePosition,
   RouteToQueueNode,
   ValidationIssue
 } from './flow-builder.models';
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
+  buildEdgePath,
   findIncomingEdge,
   findNode,
   findOutgoingEdge,
@@ -29,6 +38,15 @@ interface DragState {
   startY: number;
   originX: number;
   originY: number;
+}
+
+interface ConnectionDragState {
+  sourceNodeId: string;
+  pointerId: number;
+  startPosition: NodePosition;
+  currentPosition: NodePosition;
+  hoveredTargetNodeId: string | null;
+  didMove: boolean;
 }
 
 interface PointerLikeEvent {
@@ -48,6 +66,8 @@ type NoticeTone = 'info' | 'success' | 'error';
   styleUrl: './app.css'
 })
 export class App {
+  @ViewChild('canvasShell') private canvasShell?: ElementRef<HTMLElement>;
+
   readonly canvasWidth = 1600;
   readonly canvasHeight = 940;
   readonly queueOptions = MOCK_QUEUES;
@@ -58,6 +78,7 @@ export class App {
   });
   readonly selectedNodeId = signal<string | null>(null);
   readonly pendingConnectionSourceId = signal<string | null>(null);
+  readonly connectionDrag = signal<ConnectionDragState | null>(null);
   readonly notice = signal<{
     tone: NoticeTone;
     text: string;
@@ -93,21 +114,40 @@ export class App {
         return [];
       }
 
-      const startX = sourceNode.position.x + NODE_WIDTH - 10;
-      const startY = sourceNode.position.y + NODE_HEIGHT / 2;
-      const endX = targetNode.position.x + 10;
-      const endY = targetNode.position.y + NODE_HEIGHT / 2;
-      const controlOffset = Math.max(120, Math.abs(endX - startX) * 0.45);
+      const startPoint = this.getNodeOutputPoint(sourceNode);
+      const endPoint = this.getNodeInputPoint(targetNode);
 
       return [
         {
           id: edge.id,
-          path: `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${
-            endX - controlOffset
-          } ${endY}, ${endX} ${endY}`
+          path: buildEdgePath(startPoint.x, startPoint.y, endPoint.x, endPoint.y)
         }
       ];
     });
+  });
+  readonly previewEdgePath = computed(() => {
+    const connectionDrag = this.connectionDrag();
+
+    if (!connectionDrag || !connectionDrag.didMove) {
+      return null;
+    }
+
+    const sourceNode = findNode(this.flow(), connectionDrag.sourceNodeId);
+
+    if (!sourceNode) {
+      return null;
+    }
+
+    const startPoint = this.getNodeOutputPoint(sourceNode);
+    const targetNode =
+      connectionDrag.hoveredTargetNodeId !== null
+        ? findNode(this.flow(), connectionDrag.hoveredTargetNodeId)
+        : undefined;
+    const endPoint = targetNode
+      ? this.getNodeInputPoint(targetNode)
+      : connectionDrag.currentPosition;
+
+    return buildEdgePath(startPoint.x, startPoint.y, endPoint.x, endPoint.y);
   });
 
   private nextNodeId = 1;
@@ -128,7 +168,7 @@ export class App {
       edges: flow.edges
     });
     this.selectedNodeId.set(node.id);
-    this.pendingConnectionSourceId.set(null);
+    this.cancelConnectionSelection(false);
     this.setNotice(
       `${getNodeTitle(node.type)} added. Configure it in the inspector, then connect it on the canvas.`,
       'success'
@@ -141,11 +181,7 @@ export class App {
 
   clearCanvasSelection(): void {
     this.selectedNodeId.set(null);
-
-    if (this.pendingConnectionSourceId()) {
-      this.pendingConnectionSourceId.set(null);
-      this.setNotice('Connection selection cleared.', 'info');
-    }
+    this.cancelConnectionSelection(true);
   }
 
   removeSelectedNode(): void {
@@ -167,14 +203,18 @@ export class App {
     });
     this.selectedNodeId.set(null);
 
-    if (this.pendingConnectionSourceId() === selectedNode.id) {
-      this.pendingConnectionSourceId.set(null);
+    if (
+      this.pendingConnectionSourceId() === selectedNode.id ||
+      this.connectionDrag()?.sourceNodeId === selectedNode.id ||
+      this.connectionDrag()?.hoveredTargetNodeId === selectedNode.id
+    ) {
+      this.cancelConnectionSelection(false);
     }
 
     this.setNotice(`${getNodeTitle(selectedNode.type)} removed.`, 'success');
   }
 
-  beginDrag(event: PointerLikeEvent, nodeId: string): void {
+  beginNodeDrag(event: PointerLikeEvent, nodeId: string): void {
     const node = findNode(this.flow(), nodeId);
 
     if (!node) {
@@ -196,45 +236,108 @@ export class App {
     this.selectedNodeId.set(nodeId);
   }
 
-  onCanvasPointerMove(event: PointerLikeEvent): void {
-    if (!this.dragState) {
+  beginConnectionDrag(event: PointerLikeEvent, nodeId: string): void {
+    const node = findNode(this.flow(), nodeId);
+
+    if (!node || node.type === 'route-to-queue') {
       return;
     }
 
-    if ((event.pointerId ?? this.dragState.pointerId) !== this.dragState.pointerId) {
-      return;
-    }
+    event.preventDefault?.();
+    event.stopPropagation?.();
 
-    const nextX = this.clamp(
-      this.dragState.originX + (event.clientX - this.dragState.startX),
-      24,
-      this.canvasWidth - NODE_WIDTH - 24
-    );
-    const nextY = this.clamp(
-      this.dragState.originY + (event.clientY - this.dragState.startY),
-      24,
-      this.canvasHeight - NODE_HEIGHT - 24
-    );
+    const startPosition = this.getCanvasPointFromClient(event.clientX, event.clientY);
 
-    this.updateNode(this.dragState.nodeId, (node) => ({
-      ...node,
-      position: {
-        x: nextX,
-        y: nextY
-      }
-    }));
+    this.connectionDrag.set({
+      sourceNodeId: nodeId,
+      pointerId: event.pointerId ?? 1,
+      startPosition,
+      currentPosition: startPosition,
+      hoveredTargetNodeId: null,
+      didMove: false
+    });
+    this.pendingConnectionSourceId.set(null);
+    this.selectedNodeId.set(nodeId);
   }
 
-  onCanvasPointerUp(event?: PointerLikeEvent): void {
-    if (!this.dragState) {
+  @HostListener('window:pointermove', ['$event'])
+  onWindowPointerMove(event: PointerLikeEvent): void {
+    if (this.dragState && (event.pointerId ?? this.dragState.pointerId) === this.dragState.pointerId) {
+      const nextX = this.clamp(
+        this.dragState.originX + (event.clientX - this.dragState.startX),
+        24,
+        this.canvasWidth - NODE_WIDTH - 24
+      );
+      const nextY = this.clamp(
+        this.dragState.originY + (event.clientY - this.dragState.startY),
+        24,
+        this.canvasHeight - NODE_HEIGHT - 24
+      );
+
+      this.updateNode(this.dragState.nodeId, (node) => ({
+        ...node,
+        position: {
+          x: nextX,
+          y: nextY
+        }
+      }));
       return;
     }
 
-    if (event && (event.pointerId ?? this.dragState.pointerId) !== this.dragState.pointerId) {
+    const connectionDrag = this.connectionDrag();
+
+    if (!connectionDrag) {
       return;
     }
 
-    this.dragState = null;
+    if ((event.pointerId ?? connectionDrag.pointerId) !== connectionDrag.pointerId) {
+      return;
+    }
+
+    const nextPosition = this.getCanvasPointFromClient(event.clientX, event.clientY);
+
+    this.connectionDrag.set({
+      ...connectionDrag,
+      currentPosition: nextPosition,
+      didMove:
+        connectionDrag.didMove ||
+        Math.hypot(
+          nextPosition.x - connectionDrag.startPosition.x,
+          nextPosition.y - connectionDrag.startPosition.y
+        ) > 6
+    });
+  }
+
+  @HostListener('window:pointerup', ['$event'])
+  @HostListener('window:pointercancel', ['$event'])
+  onWindowPointerUp(event?: PointerLikeEvent): void {
+    if (this.dragState && (!event || (event.pointerId ?? this.dragState.pointerId) === this.dragState.pointerId)) {
+      this.dragState = null;
+      return;
+    }
+
+    const connectionDrag = this.connectionDrag();
+
+    if (!connectionDrag) {
+      return;
+    }
+
+    if (event && (event.pointerId ?? connectionDrag.pointerId) !== connectionDrag.pointerId) {
+      return;
+    }
+
+    if (!connectionDrag.didMove) {
+      this.connectionDrag.set(null);
+      return;
+    }
+
+    if (connectionDrag.hoveredTargetNodeId) {
+      this.completeConnection(connectionDrag.sourceNodeId, connectionDrag.hoveredTargetNodeId);
+      return;
+    }
+
+    this.connectionDrag.set(null);
+    this.setNotice('Connection drag cancelled.', 'info');
   }
 
   handleOutputHandleClick(nodeId: string, event: Event): void {
@@ -256,13 +359,60 @@ export class App {
     this.pendingConnectionSourceId.set(nodeId);
     this.selectedNodeId.set(nodeId);
     this.setNotice(
-      'Connection started. Click an input handle on the next node to link the flow.',
+      'Connection started. Drag onto a node or click an input handle to link the flow.',
       'info'
     );
   }
 
+  handleNodeConnectionPointerEnter(nodeId: string): void {
+    const connectionDrag = this.connectionDrag();
+
+    if (!connectionDrag || !this.isNodeConnectionTarget(nodeId)) {
+      return;
+    }
+
+    this.connectionDrag.set({
+      ...connectionDrag,
+      hoveredTargetNodeId: nodeId
+    });
+  }
+
+  handleNodeConnectionPointerLeave(nodeId: string): void {
+    const connectionDrag = this.connectionDrag();
+
+    if (!connectionDrag || connectionDrag.hoveredTargetNodeId !== nodeId) {
+      return;
+    }
+
+    this.connectionDrag.set({
+      ...connectionDrag,
+      hoveredTargetNodeId: null
+    });
+  }
+
+  handleNodeConnectionPointerUp(nodeId: string, event: PointerLikeEvent): void {
+    const connectionDrag = this.connectionDrag();
+
+    if (
+      !connectionDrag ||
+      !connectionDrag.didMove ||
+      (event.pointerId ?? connectionDrag.pointerId) !== connectionDrag.pointerId ||
+      !this.isNodeConnectionTarget(nodeId)
+    ) {
+      return;
+    }
+
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    this.completeConnection(connectionDrag.sourceNodeId, nodeId);
+  }
+
   handleInputHandleClick(nodeId: string, event: Event): void {
     event.stopPropagation();
+
+    if (this.connectionDrag()?.didMove) {
+      return;
+    }
 
     const sourceNodeId = this.pendingConnectionSourceId();
 
@@ -272,27 +422,7 @@ export class App {
       return;
     }
 
-    const validation = this.validateConnection(sourceNodeId, nodeId);
-
-    if (!validation.ok) {
-      this.setNotice(validation.message, 'error');
-      return;
-    }
-
-    const flow = this.flow();
-    const nextEdge: FlowEdge = {
-      id: `edge-${this.nextEdgeId++}`,
-      sourceNodeId,
-      targetNodeId: nodeId
-    };
-
-    this.flow.set({
-      nodes: flow.nodes,
-      edges: [...flow.edges, nextEdge]
-    });
-    this.pendingConnectionSourceId.set(null);
-    this.selectedNodeId.set(nodeId);
-    this.setNotice('Nodes connected.', 'success');
+    this.completeConnection(sourceNodeId, nodeId);
   }
 
   updateSelectedVariableKey(variableKey: string): void {
@@ -409,6 +539,17 @@ export class App {
 
   hasIssuesForNode(nodeId: string): boolean {
     return this.getIssuesForNode(nodeId).length > 0;
+  }
+
+  isConnectionSourceActive(nodeId: string): boolean {
+    return (
+      this.pendingConnectionSourceId() === nodeId ||
+      this.connectionDrag()?.sourceNodeId === nodeId
+    );
+  }
+
+  isConnectionDropTarget(nodeId: string): boolean {
+    return this.connectionDrag()?.hoveredTargetNodeId === nodeId;
   }
 
   canAcceptIncoming(node: FlowNode): boolean {
@@ -553,6 +694,82 @@ export class App {
       ok: true,
       message: 'Connection is valid.'
     };
+  }
+
+  private completeConnection(sourceNodeId: string, targetNodeId: string): void {
+    const validation = this.validateConnection(sourceNodeId, targetNodeId);
+
+    if (!validation.ok) {
+      this.connectionDrag.set(null);
+      this.pendingConnectionSourceId.set(null);
+      this.setNotice(validation.message, 'error');
+      return;
+    }
+
+    const flow = this.flow();
+    const nextEdge: FlowEdge = {
+      id: `edge-${this.nextEdgeId++}`,
+      sourceNodeId,
+      targetNodeId
+    };
+
+    this.flow.set({
+      nodes: flow.nodes,
+      edges: [...flow.edges, nextEdge]
+    });
+    this.connectionDrag.set(null);
+    this.pendingConnectionSourceId.set(null);
+    this.selectedNodeId.set(targetNodeId);
+    this.setNotice('Nodes connected.', 'success');
+  }
+
+  private cancelConnectionSelection(showNotice: boolean): void {
+    const hadSelection = !!this.pendingConnectionSourceId() || !!this.connectionDrag();
+    this.pendingConnectionSourceId.set(null);
+    this.connectionDrag.set(null);
+
+    if (showNotice && hadSelection) {
+      this.setNotice('Connection selection cleared.', 'info');
+    }
+  }
+
+  private getCanvasPointFromClient(clientX: number, clientY: number): NodePosition {
+    const canvasShell = this.canvasShell?.nativeElement;
+
+    if (!canvasShell) {
+      return {
+        x: clientX,
+        y: clientY
+      };
+    }
+
+    const rect = canvasShell.getBoundingClientRect();
+
+    return {
+      x: this.clamp(clientX - rect.left + canvasShell.scrollLeft, 0, this.canvasWidth),
+      y: this.clamp(clientY - rect.top + canvasShell.scrollTop, 0, this.canvasHeight)
+    };
+  }
+
+  private getNodeOutputPoint(node: FlowNode): NodePosition {
+    return {
+      x: node.position.x + NODE_WIDTH,
+      y: node.position.y + NODE_HEIGHT / 2
+    };
+  }
+
+  private getNodeInputPoint(node: FlowNode): NodePosition {
+    return {
+      x: node.position.x,
+      y: node.position.y + NODE_HEIGHT / 2
+    };
+  }
+
+  private isNodeConnectionTarget(nodeId: string): boolean {
+    const connectionDrag = this.connectionDrag();
+    const node = findNode(this.flow(), nodeId);
+
+    return !!connectionDrag && !!node && node.type !== 'start' && node.id !== connectionDrag.sourceNodeId;
   }
 
   private setNotice(text: string, tone: NoticeTone): void {
