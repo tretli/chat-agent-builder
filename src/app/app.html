@@ -2,11 +2,11 @@
   <header class="hero">
     <div>
       <p class="eyebrow">Chat AI sequence builder</p>
-      <h1>Design how a conversation qualifies, collects details, and lands in the right queue.</h1>
+      <h1>Design how a conversation qualifies, guides the user, and lands in the right outcome.</h1>
     </div>
     <p class="hero-copy">
-      Build a visual flow for chat intake with a connected canvas, structured node config,
-      and live JSON output.
+      Build a visual intake flow with conversational steps, structured branching, shared fallback
+      targets, and live JSON output.
     </p>
   </header>
 
@@ -14,57 +14,139 @@
     <aside class="panel palette-panel">
       <div class="panel-heading">
         <h2>Palette</h2>
-        <span>Node types</span>
+        <span>Phase 1 modules</span>
       </div>
 
-      <button
-        type="button"
-        class="palette-card"
-        data-testid="add-start-node"
-        [disabled]="hasStartNode()"
-        (click)="addNode('start')"
-      >
-        <span class="palette-title">Start</span>
-        <span class="palette-copy">Create the entry point for the chat sequence.</span>
-      </button>
+      <div class="palette-section">
+        <span class="palette-section-label">Start</span>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-start-node"
+          [disabled]="hasStartNode()"
+          (click)="addNode('start')"
+        >
+          <span class="palette-title">Start</span>
+          <span class="palette-copy">Create the entry point for the chat sequence.</span>
+        </button>
+      </div>
 
-      <button
-        type="button"
-        class="palette-card"
-        data-testid="add-collect-node"
-        (click)="addNode('collect-variable')"
-      >
-        <span class="palette-title">Collect Variable</span>
-        <span class="palette-copy">Capture a variable like name, company, or use case.</span>
-      </button>
+      <div class="palette-section">
+        <span class="palette-section-label">Messaging</span>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-send-message-node"
+          (click)="addNode('send-message')"
+        >
+          <span class="palette-title">Send Message</span>
+          <span class="palette-copy">Let the bot speak before the flow moves on.</span>
+        </button>
 
-      <button
-        type="button"
-        class="palette-card"
-        data-testid="add-decision-node"
-        (click)="addNode('decision')"
-      >
-        <span class="palette-title">Decision</span>
-        <span class="palette-copy">
-          Define multiple exits and branch the flow based on what the user wants.
-        </span>
-      </button>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-ask-question-node"
+          (click)="addNode('ask-question')"
+        >
+          <span class="palette-title">Ask Question</span>
+          <span class="palette-copy">Collect transient conversational context without storing a named variable.</span>
+        </button>
 
-      <button
-        type="button"
-        class="palette-card"
-        data-testid="add-route-node"
-        (click)="addNode('route-to-queue')"
-      >
-        <span class="palette-title">Route to Queue</span>
-        <span class="palette-copy">End the flow by choosing which queue receives the chat.</span>
-      </button>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-collect-node"
+          (click)="addNode('collect-variable')"
+        >
+          <span class="palette-title">Collect Variable</span>
+          <span class="palette-copy">Capture a reusable variable like company, team size, or use case.</span>
+        </button>
+      </div>
+
+      <div class="palette-section">
+        <span class="palette-section-label">Logic</span>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-decision-node"
+          (click)="addNode('decision')"
+        >
+          <span class="palette-title">Decision</span>
+          <span class="palette-copy">Branch by user intent with multiple labeled exits.</span>
+        </button>
+
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-condition-node"
+          (click)="addNode('condition')"
+        >
+          <span class="palette-title">Condition</span>
+          <span class="palette-copy">Branch on known variables and keep a no-match path ready.</span>
+        </button>
+
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-fallback-node"
+          (click)="addNode('fallback')"
+        >
+          <span class="palette-title">Fallback</span>
+          <span class="palette-copy">Handle unclear answers or no-match cases before continuing.</span>
+        </button>
+      </div>
+
+      <div class="palette-section">
+        <span class="palette-section-label">Routing & End</span>
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-route-node"
+          (click)="addNode('route-to-queue')"
+        >
+          <span class="palette-title">Route to Queue</span>
+          <span class="palette-copy">End the flow by choosing which queue receives the chat.</span>
+        </button>
+
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-handoff-node"
+          (click)="addNode('human-handoff')"
+        >
+          <span class="palette-title">Human Handoff</span>
+          <span class="palette-copy">Escalate to a human queue with transfer context.</span>
+        </button>
+
+        <button
+          type="button"
+          class="palette-card"
+          data-testid="add-end-node"
+          (click)="addNode('end-conversation')"
+        >
+          <span class="palette-title">End Conversation</span>
+          <span class="palette-copy">Close the chat cleanly with an optional final message.</span>
+        </button>
+      </div>
+
+      <div class="palette-section palette-section-advanced">
+        <span class="palette-section-label">Advanced</span>
+        <div class="palette-coming-soon">
+          <span>Set Variable</span>
+          <span>API Lookup</span>
+          <span>Knowledge Answer</span>
+        </div>
+        <p class="field-copy">
+          These Phase 2 modules are specified next, but Phase 1 focuses on the routing and handoff flow.
+        </p>
+      </div>
 
       <div class="palette-note">
         <h3>Flow rules</h3>
         <p>
-          Keep one start node, one incoming edge per node, and use decision exits to
-          branch into the right queue routes.
+          Most nodes still take one incoming edge, but fallback and terminal targets can be shared by
+          multiple branches.
         </p>
       </div>
     </aside>
@@ -123,8 +205,8 @@
             <div class="empty-state" data-testid="empty-canvas">
               <h3>Start with a node</h3>
               <p>
-                Add a start node, collect the details you need, and route the conversation
-                to a queue when the sequence is complete.
+                Add a start node, guide the conversation with messages or questions, then branch into
+                a queue, human handoff, or clean ending.
               </p>
             </div>
           }
@@ -134,7 +216,8 @@
               class="node-card"
               [attr.data-testid]="'node-' + node.id"
               [class.node-selected]="selectedNodeId() === node.id"
-              [class.node-decision]="node.type === 'decision'"
+              [class.node-branch]="isMultiPortNode(node)"
+              [class.node-terminal]="!canStartConnection(node)"
               [class.node-invalid]="hasIssuesForNode(node.id)"
               [class.node-drop-target]="isConnectionDropTarget(node.id)"
               [style.height.px]="getNodeHeight(node)"
@@ -172,16 +255,14 @@
                 <h3>{{ getNodeHeadline(node) }}</h3>
                 <p>{{ getNodeSummary(node) }}</p>
 
-                @if (node.type === 'decision') {
-                  <div class="decision-exit-list">
-                    @for (exit of node.config.exits; track exit.id) {
-                      <div class="decision-exit-row">
-                        <div class="decision-exit-copy">
-                          <span class="decision-exit-label">
-                            {{ getDecisionExitDisplayLabel(exit.label, $index) }}
-                          </span>
-                          <span class="decision-exit-state">
-                            {{ getDecisionExitStatus(node.id, exit.id) }}
+                @if (isMultiPortNode(node)) {
+                  <div class="port-list">
+                    @for (port of getOutputPorts(node); track port.id) {
+                      <div class="port-row">
+                        <div class="port-copy">
+                          <span class="port-label">{{ port.label }}</span>
+                          <span class="port-state">
+                            {{ isPortConnected(node.id, port.id) ? 'Connected' : 'Needs connection' }}
                           </span>
                         </div>
                       </div>
@@ -194,17 +275,17 @@
                 }
               </div>
 
-              @if (node.type === 'decision') {
-                @for (exit of node.config.exits; track exit.id) {
+              @if (isMultiPortNode(node)) {
+                @for (port of getOutputPorts(node); track port.id) {
                   <button
                     type="button"
                     class="handle handle-output handle-output-branch"
-                    [class.handle-pending]="isConnectionSourceActive(node.id, exit.id)"
-                    [style.top.px]="getDecisionExitHandleTop(node, exit.id)"
-                    [attr.aria-label]="'Connect from ' + getDecisionExitDisplayLabel(exit.label, $index)"
-                    [attr.data-testid]="getOutputHandleTestId(node.id, exit.id)"
-                    (pointerdown)="beginConnectionDrag($event, node.id, exit.id)"
-                    (click)="handleOutputHandleClick(node.id, $event, exit.id)"
+                    [class.handle-pending]="isConnectionSourceActive(node.id, port.id)"
+                    [style.top.px]="getOutputPortHandleTop(node, port.id)"
+                    [attr.aria-label]="'Connect from ' + port.label"
+                    [attr.data-testid]="getOutputHandleTestId(node.id, port.id)"
+                    (pointerdown)="beginConnectionDrag($event, node.id, port.id)"
+                    (click)="handleOutputHandleClick(node.id, $event, port.id)"
                   ></button>
                 }
               } @else if (canStartConnection(node)) {
@@ -242,10 +323,67 @@
             <div class="field-group">
               <label>Behavior</label>
               <p class="field-copy">
-                The start node marks where the chat flow begins. Connect it to the first
-                variable collection or queue route.
+                The start node marks where the chat flow begins. Connect it to the first message,
+                question, variable, or logic step.
               </p>
             </div>
+          }
+
+          @if (node.type === 'send-message') {
+            <div class="field-group">
+              <label for="send-message">Message</label>
+              <textarea
+                id="send-message"
+                rows="4"
+                data-testid="send-message-input"
+                [ngModel]="node.config.message"
+                (ngModelChange)="updateSelectedSendMessage($event)"
+                placeholder="Welcome! I can help route you to the right team."
+              ></textarea>
+            </div>
+          }
+
+          @if (node.type === 'ask-question') {
+            <div class="field-group">
+              <label for="ask-prompt">Prompt</label>
+              <textarea
+                id="ask-prompt"
+                rows="4"
+                data-testid="ask-prompt-input"
+                [ngModel]="node.config.prompt"
+                (ngModelChange)="updateSelectedAskPrompt($event)"
+                placeholder="What are you hoping to get help with today?"
+              ></textarea>
+            </div>
+
+            <div class="field-group">
+              <label for="ask-response-kind">Response kind</label>
+              <select
+                id="ask-response-kind"
+                data-testid="ask-response-kind-select"
+                [ngModel]="node.config.responseKind"
+                (ngModelChange)="updateSelectedAskResponseKind($event)"
+              >
+                @for (option of responseKindOptions; track option.id) {
+                  <option [value]="option.id">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+
+            @if (node.config.responseKind === 'single-choice') {
+              <div class="field-group">
+                <label for="ask-choice-list">Choices</label>
+                <textarea
+                  id="ask-choice-list"
+                  rows="4"
+                  data-testid="ask-choice-list-input"
+                  [ngModel]="getAskChoiceText(node)"
+                  (ngModelChange)="updateSelectedAskChoices($event)"
+                  placeholder="Sales&#10;Support&#10;Billing"
+                ></textarea>
+                <p class="field-copy">Use one option per line.</p>
+              </div>
+            }
           }
 
           @if (node.type === 'collect-variable') {
@@ -292,25 +430,21 @@
               <label for="decision-prompt">Intent prompt</label>
               <textarea
                 id="decision-prompt"
-                name="decisionPrompt"
                 rows="4"
                 data-testid="decision-prompt-input"
                 [ngModel]="node.config.intentPrompt"
                 (ngModelChange)="updateSelectedDecisionPrompt($event)"
                 placeholder="Describe how the AI should decide which exit matches the user's goal."
               ></textarea>
-              <p class="field-copy">
-                Tell the AI how to interpret the user's request before choosing an exit.
-              </p>
             </div>
 
             <div class="field-group">
               <label>Defined exits</label>
-              <div class="decision-editor-list">
+              <div class="editor-list">
                 @for (exit of node.config.exits; track exit.id) {
-                  <div class="decision-editor-row">
-                    <div class="decision-editor-field">
-                      <span class="decision-editor-label">Exit {{ $index + 1 }}</span>
+                  <div class="editor-row">
+                    <div class="editor-field">
+                      <span class="editor-label">Exit {{ $index + 1 }}</span>
                       <input
                         type="text"
                         [attr.data-testid]="'decision-exit-input-' + exit.id"
@@ -332,9 +466,6 @@
                   </div>
                 }
               </div>
-              <p class="field-copy">
-                Each exit can connect to one next node, so the intent routing stays explicit.
-              </p>
             </div>
 
             <button
@@ -347,12 +478,116 @@
             </button>
           }
 
+          @if (node.type === 'condition') {
+            <div class="field-group">
+              <label for="condition-default-label">No-match label</label>
+              <input
+                id="condition-default-label"
+                type="text"
+                data-testid="condition-default-label-input"
+                [ngModel]="node.config.defaultPortLabel"
+                (ngModelChange)="updateSelectedConditionDefaultPortLabel($event)"
+                placeholder="No match"
+              />
+            </div>
+
+            <div class="field-group">
+              <label>Rules</label>
+              <div class="editor-list">
+                @for (rule of node.config.rules; track rule.id) {
+                  <div class="rule-card">
+                    <div class="editor-field">
+                      <span class="editor-label">Rule {{ $index + 1 }}</span>
+                      <input
+                        type="text"
+                        [attr.data-testid]="'condition-rule-label-' + rule.id"
+                        [ngModel]="rule.label"
+                        (ngModelChange)="updateConditionRuleLabel(rule.id, $event)"
+                        placeholder="Enterprise leads"
+                      />
+                    </div>
+
+                    <div class="rule-grid">
+                      <div class="editor-field">
+                        <span class="editor-label">Variable key</span>
+                        <input
+                          type="text"
+                          [attr.data-testid]="'condition-rule-variable-' + rule.id"
+                          [ngModel]="rule.variableKey"
+                          (ngModelChange)="updateConditionRuleVariableKey(rule.id, $event)"
+                          placeholder="plan"
+                        />
+                      </div>
+
+                      <div class="editor-field">
+                        <span class="editor-label">Operator</span>
+                        <select
+                          [attr.data-testid]="'condition-rule-operator-' + rule.id"
+                          [ngModel]="rule.operator"
+                          (ngModelChange)="updateConditionRuleOperator(rule.id, $event)"
+                        >
+                          @for (option of conditionOperatorOptions; track option.id) {
+                            <option [value]="option.id">{{ option.label }}</option>
+                          }
+                        </select>
+                      </div>
+                    </div>
+
+                    @if (requiresConditionValue(rule.operator)) {
+                      <div class="editor-field">
+                        <span class="editor-label">Value</span>
+                        <input
+                          type="text"
+                          [attr.data-testid]="'condition-rule-value-' + rule.id"
+                          [ngModel]="rule.value"
+                          (ngModelChange)="updateConditionRuleValue(rule.id, $event)"
+                          placeholder="enterprise"
+                        />
+                      </div>
+                    }
+
+                    <button
+                      type="button"
+                      class="inline-action"
+                      [attr.data-testid]="'remove-condition-rule-' + rule.id"
+                      (click)="removeConditionRule(rule.id)"
+                    >
+                      Remove rule
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="secondary-action"
+              data-testid="add-condition-rule"
+              (click)="addConditionRule()"
+            >
+              Add rule
+            </button>
+          }
+
+          @if (node.type === 'fallback') {
+            <div class="field-group">
+              <label for="fallback-message">Fallback message</label>
+              <textarea
+                id="fallback-message"
+                rows="4"
+                data-testid="fallback-message-input"
+                [ngModel]="node.config.message"
+                (ngModelChange)="updateSelectedFallbackMessage($event)"
+                placeholder="I’m not fully sure which team fits yet, so I’ll get you to the right place."
+              ></textarea>
+            </div>
+          }
+
           @if (node.type === 'route-to-queue') {
             <div class="field-group">
               <label for="queue-select">Destination queue</label>
               <select
                 id="queue-select"
-                name="queueId"
                 data-testid="queue-select"
                 [ngModel]="node.config.queueId"
                 (ngModelChange)="updateSelectedQueue($event)"
@@ -367,6 +602,62 @@
             <div class="field-group">
               <label>Queue detail</label>
               <p class="field-copy">{{ getQueueDescription(node) }}</p>
+            </div>
+          }
+
+          @if (node.type === 'human-handoff') {
+            <div class="field-group">
+              <label for="handoff-queue">Destination queue</label>
+              <select
+                id="handoff-queue"
+                data-testid="handoff-queue-select"
+                [ngModel]="node.config.queueId"
+                (ngModelChange)="updateSelectedHandoffQueue($event)"
+              >
+                <option value="">Select a queue</option>
+                @for (queue of queueOptions; track queue.id) {
+                  <option [value]="queue.id">{{ queue.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label for="handoff-transfer-message">Transfer message</label>
+              <textarea
+                id="handoff-transfer-message"
+                rows="4"
+                data-testid="handoff-transfer-message-input"
+                [ngModel]="node.config.transferMessage"
+                (ngModelChange)="updateSelectedTransferMessage($event)"
+                placeholder="I’m connecting you with a specialist now."
+              ></textarea>
+            </div>
+
+            <div class="field-group">
+              <label>Queue detail</label>
+              <p class="field-copy">{{ getQueueDescription(node) }}</p>
+            </div>
+          }
+
+          @if (node.type === 'end-conversation') {
+            <div class="field-group">
+              <label for="end-message">Closing message</label>
+              <textarea
+                id="end-message"
+                rows="4"
+                data-testid="end-message-input"
+                [ngModel]="node.config.closingMessage"
+                (ngModelChange)="updateSelectedClosingMessage($event)"
+                placeholder="Thanks for chatting with us today."
+              ></textarea>
+              <p class="field-copy">Optional. Leave blank if the flow should simply end.</p>
+            </div>
+          }
+
+          @if (node.type === 'set-variable' || node.type === 'api-lookup' || node.type === 'knowledge-answer') {
+            <div class="empty-panel">
+              <h3>Phase 2 module</h3>
+              <p>This node type is reserved for the next builder phase and is not editable yet.</p>
             </div>
           }
         </div>
@@ -393,7 +684,7 @@
       } @else {
         <div class="valid-state">
           <h3>Flow is structurally valid</h3>
-          <p>The current sequence has a start, a route, and no validation errors.</p>
+          <p>The current sequence has a start, a terminal outcome, and no validation errors.</p>
         </div>
       }
 

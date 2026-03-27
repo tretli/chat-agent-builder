@@ -1,6 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
-import { DecisionNode, FlowDefinition, FlowNode } from './flow-builder.models';
+import {
+  AskQuestionNode,
+  ConditionNode,
+  DecisionNode,
+  FlowDefinition,
+  FlowNode
+} from './flow-builder.models';
+import { CONDITION_DEFAULT_PORT_ID } from './flow-builder.utils';
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
@@ -18,31 +25,101 @@ describe('App', () => {
     fixture.detectChanges();
   });
 
-  it('renders the flow builder shell', () => {
+  it('renders the expanded builder shell', () => {
     expect(host.querySelector('h1')?.textContent).toContain(
       'Design how a conversation qualifies'
     );
     expect(getByTestId('add-start-node')).not.toBeNull();
-    expect(getByTestId('add-collect-node')).not.toBeNull();
-    expect(getByTestId('add-decision-node')).not.toBeNull();
-    expect(getByTestId('add-route-node')).not.toBeNull();
+    expect(getByTestId('add-send-message-node')).not.toBeNull();
+    expect(getByTestId('add-ask-question-node')).not.toBeNull();
+    expect(getByTestId('add-condition-node')).not.toBeNull();
+    expect(getByTestId('add-fallback-node')).not.toBeNull();
+    expect(getByTestId('add-handoff-node')).not.toBeNull();
+    expect(getByTestId('add-end-node')).not.toBeNull();
     expect(getByTestId('empty-canvas')?.textContent).toContain('Start with a node');
   });
 
-  it('adds each node type and keeps the last node selected', () => {
+  it('adds each phase one node type and keeps the last node selected', () => {
     clickByTestId('add-start-node');
+    clickByTestId('add-send-message-node');
+    clickByTestId('add-ask-question-node');
     clickByTestId('add-collect-node');
     clickByTestId('add-decision-node');
+    clickByTestId('add-condition-node');
+    clickByTestId('add-fallback-node');
     clickByTestId('add-route-node');
+    clickByTestId('add-handoff-node');
+    clickByTestId('add-end-node');
 
     expect(app.flow().nodes.map((node) => node.type)).toEqual([
       'start',
+      'send-message',
+      'ask-question',
       'collect-variable',
       'decision',
-      'route-to-queue'
+      'condition',
+      'fallback',
+      'route-to-queue',
+      'human-handoff',
+      'end-conversation'
     ]);
-    expect(app.selectedNode()?.type).toBe('route-to-queue');
-    expect(host.querySelectorAll('.node-card').length).toBe(4);
+    expect(app.selectedNode()?.type).toBe('end-conversation');
+    expect(host.querySelectorAll('.node-card').length).toBe(10);
+  });
+
+  it('updates send-message settings from the inspector', async () => {
+    clickByTestId('add-send-message-node');
+
+    const messageInput = getByTestId('send-message-input') as HTMLTextAreaElement;
+    messageInput.value = 'Welcome to the team routing assistant.';
+    messageInput.dispatchEvent(new Event('input'));
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const selectedNode = app.selectedNode();
+
+    expect(selectedNode?.type).toBe('send-message');
+    if (selectedNode?.type !== 'send-message') {
+      throw new Error('Expected send-message node to stay selected.');
+    }
+
+    expect(selectedNode.config.message).toBe('Welcome to the team routing assistant.');
+  });
+
+  it('updates ask-question settings from the inspector', async () => {
+    clickByTestId('add-ask-question-node');
+
+    const promptInput = getByTestId('ask-prompt-input') as HTMLTextAreaElement;
+    promptInput.value = 'Which team are you looking for today?';
+    promptInput.dispatchEvent(new Event('input'));
+
+    const responseKindSelect = getByTestId(
+      'ask-response-kind-select'
+    ) as HTMLSelectElement;
+    responseKindSelect.value = 'single-choice';
+    responseKindSelect.dispatchEvent(new Event('change'));
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const choiceInput = getByTestId('ask-choice-list-input') as HTMLTextAreaElement;
+    choiceInput.value = 'Sales\nSupport\nBilling';
+    choiceInput.dispatchEvent(new Event('input'));
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const selectedNode = app.selectedNode();
+
+    expect(selectedNode?.type).toBe('ask-question');
+    if (selectedNode?.type !== 'ask-question') {
+      throw new Error('Expected ask-question node to stay selected.');
+    }
+
+    expect(selectedNode.config.prompt).toBe('Which team are you looking for today?');
+    expect(selectedNode.config.responseKind).toBe('single-choice');
+    expect(selectedNode.config.choices).toEqual(['Sales', 'Support', 'Billing']);
   });
 
   it('updates collect-variable settings from the inspector', async () => {
@@ -125,26 +202,115 @@ describe('App', () => {
     ]);
   });
 
-  it('updates the selected route queue from the inspector', async () => {
-    clickByTestId('add-route-node');
+  it('updates condition settings from the inspector', async () => {
+    clickByTestId('add-condition-node');
 
-    const queueSelect = getByTestId('queue-select') as HTMLSelectElement;
-    queueSelect.value = 'sales-priority';
-    queueSelect.dispatchEvent(new Event('change'));
+    const conditionNode = getSelectedConditionNode();
+    const firstRule = conditionNode.config.rules[0];
+
+    const defaultLabelInput = getByTestId(
+      'condition-default-label-input'
+    ) as HTMLInputElement;
+    defaultLabelInput.value = 'Otherwise';
+    defaultLabelInput.dispatchEvent(new Event('input'));
+
+    const ruleLabelInput = getByTestId(
+      `condition-rule-label-${firstRule.id}`
+    ) as HTMLInputElement;
+    ruleLabelInput.value = 'Enterprise';
+    ruleLabelInput.dispatchEvent(new Event('input'));
+
+    const variableInput = getByTestId(
+      `condition-rule-variable-${firstRule.id}`
+    ) as HTMLInputElement;
+    variableInput.value = 'plan';
+    variableInput.dispatchEvent(new Event('input'));
+
+    const operatorSelect = getByTestId(
+      `condition-rule-operator-${firstRule.id}`
+    ) as HTMLSelectElement;
+    operatorSelect.value = 'equals';
+    operatorSelect.dispatchEvent(new Event('change'));
+
+    const valueInput = getByTestId(
+      `condition-rule-value-${firstRule.id}`
+    ) as HTMLInputElement;
+    valueInput.value = 'enterprise';
+    valueInput.dispatchEvent(new Event('input'));
+
+    clickByTestId('add-condition-rule');
 
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const selectedNode = app.selectedNode();
+    const updatedNode = getSelectedConditionNode();
+    const secondRule = updatedNode.config.rules[1];
+    const secondRuleLabel = getByTestId(
+      `condition-rule-label-${secondRule.id}`
+    ) as HTMLInputElement;
+    secondRuleLabel.value = 'Nordics';
+    secondRuleLabel.dispatchEvent(new Event('input'));
 
-    expect(selectedNode?.type).toBe('route-to-queue');
-    if (selectedNode?.type !== 'route-to-queue') {
-      throw new Error('Expected route node to stay selected.');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const finalNode = getSelectedConditionNode();
+
+    expect(finalNode.config.defaultPortLabel).toBe('Otherwise');
+    expect(finalNode.config.rules.map((rule) => rule.label)).toEqual([
+      'Enterprise',
+      'Nordics'
+    ]);
+    expect(finalNode.config.rules[0].variableKey).toBe('plan');
+    expect(finalNode.config.rules[0].value).toBe('enterprise');
+  });
+
+  it('updates fallback, handoff, and end settings from the inspector', async () => {
+    clickByTestId('add-fallback-node');
+
+    const fallbackInput = getByTestId('fallback-message-input') as HTMLTextAreaElement;
+    fallbackInput.value = 'I am not fully sure yet, so I will route you to a specialist.';
+    fallbackInput.dispatchEvent(new Event('input'));
+
+    clickByTestId('add-handoff-node');
+    const handoffQueueSelect = getByTestId('handoff-queue-select') as HTMLSelectElement;
+    handoffQueueSelect.value = 'support-general';
+    handoffQueueSelect.dispatchEvent(new Event('change'));
+
+    const handoffMessageInput = getByTestId(
+      'handoff-transfer-message-input'
+    ) as HTMLTextAreaElement;
+    handoffMessageInput.value = 'Connecting you with a support specialist now.';
+    handoffMessageInput.dispatchEvent(new Event('input'));
+
+    clickByTestId('add-end-node');
+    const endMessageInput = getByTestId('end-message-input') as HTMLTextAreaElement;
+    endMessageInput.value = 'Thanks for reaching out today.';
+    endMessageInput.dispatchEvent(new Event('input'));
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const fallbackNode = app.flow().nodes[0];
+    const handoffNode = app.flow().nodes[1];
+    const endNode = app.flow().nodes[2];
+
+    if (fallbackNode.type !== 'fallback') {
+      throw new Error('Expected fallback node.');
     }
 
-    expect(selectedNode.config.queueId).toBe('sales-priority');
-    expect(selectedNode.config.queueName).toBe('Sales Priority');
-    expect(host.textContent).toContain('High-intent conversations');
+    if (handoffNode.type !== 'human-handoff') {
+      throw new Error('Expected human-handoff node.');
+    }
+
+    if (endNode.type !== 'end-conversation') {
+      throw new Error('Expected end-conversation node.');
+    }
+
+    expect(fallbackNode.config.message).toContain('route you to a specialist');
+    expect(handoffNode.config.queueId).toBe('support-general');
+    expect(handoffNode.config.transferMessage).toContain('support specialist');
+    expect(endNode.config.closingMessage).toBe('Thanks for reaching out today.');
   });
 
   it('updates node position while dragging and does not start a connection drag', () => {
@@ -168,19 +334,19 @@ describe('App', () => {
 
   it('keeps click-to-connect as a fallback', () => {
     clickByTestId('add-start-node');
-    clickByTestId('add-collect-node');
+    clickByTestId('add-send-message-node');
     clickByTestId('add-route-node');
 
-    const [startNode, collectNode, routeNode] = app.flow().nodes;
+    const [startNode, sendNode, routeNode] = app.flow().nodes;
 
     clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${collectNode.id}`);
+    clickByTestId(`input-${sendNode.id}`);
 
     expect(app.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: startNode.id,
-        targetNodeId: collectNode.id
+        targetNodeId: sendNode.id
       }
     ]);
 
@@ -191,260 +357,169 @@ describe('App', () => {
     expect(app.notice().text).toContain('already has an outgoing connection');
   });
 
-  it('creates connections from different decision exits', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-decision-node');
+  it('connects condition rules and the no-match port', () => {
+    clickByTestId('add-condition-node');
     clickByTestId('add-route-node');
-    clickByTestId('add-route-node');
+    clickByTestId('add-fallback-node');
 
-    const [startNode, decisionNode, routeNodeA, routeNodeB] = app.flow().nodes;
-    const branchNode = asDecisionNode(decisionNode);
+    const [conditionNode, routeNode, fallbackNode] = app.flow().nodes;
+    const ruleNode = asConditionNode(conditionNode);
+    const firstRule = ruleNode.config.rules[0];
 
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${branchNode.id}`);
-    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
-    clickByTestId(`input-${routeNodeA.id}`);
-    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
-    clickByTestId(`input-${routeNodeB.id}`);
+    clickByTestId(`output-${ruleNode.id}-${firstRule.id}`);
+    clickByTestId(`input-${routeNode.id}`);
+    clickByTestId(`output-${ruleNode.id}-${CONDITION_DEFAULT_PORT_ID}`);
+    clickByTestId(`input-${fallbackNode.id}`);
 
     expect(app.flow().edges).toEqual([
       {
         id: 'edge-1',
-        sourceNodeId: startNode.id,
-        targetNodeId: branchNode.id
+        sourceNodeId: ruleNode.id,
+        targetNodeId: routeNode.id,
+        sourcePortId: firstRule.id
       },
       {
         id: 'edge-2',
-        sourceNodeId: branchNode.id,
-        targetNodeId: routeNodeA.id,
-        sourceExitId: branchNode.config.exits[0].id
-      },
-      {
-        id: 'edge-3',
-        sourceNodeId: branchNode.id,
-        targetNodeId: routeNodeB.id,
-        sourceExitId: branchNode.config.exits[1].id
+        sourceNodeId: ruleNode.id,
+        targetNodeId: fallbackNode.id,
+        sourcePortId: CONDITION_DEFAULT_PORT_ID
       }
     ]);
   });
 
-  it('rejects connecting the same decision exit twice', () => {
-    clickByTestId('add-decision-node');
-    clickByTestId('add-route-node');
-    clickByTestId('add-route-node');
-
-    const [decisionNode, routeNodeA, routeNodeB] = app.flow().nodes;
-    const branchNode = asDecisionNode(decisionNode);
-    const exitId = branchNode.config.exits[0].id;
-
-    clickByTestId(`output-${branchNode.id}-${exitId}`);
-    clickByTestId(`input-${routeNodeA.id}`);
-    clickByTestId(`output-${branchNode.id}-${exitId}`);
-    clickByTestId(`input-${routeNodeB.id}`);
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: branchNode.id,
-        targetNodeId: routeNodeA.id,
-        sourceExitId: exitId
-      }
-    ]);
-    expect(app.notice().text).toContain('already connected');
-  });
-
-  it('creates a connection by dragging from the output handle to the target node card', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-collect-node');
-
-    const [startNode, collectNode] = app.flow().nodes;
-
-    app.beginConnectionDrag(createPointerEvent(110, 110, 7), startNode.id);
-    app.onWindowPointerMove(createPointerEvent(220, 240, 7));
-    fixture.detectChanges();
-
-    expect(app.previewEdgePath()).not.toBeNull();
-    expect(getByTestId('preview-edge')).not.toBeNull();
-
-    app.handleNodeConnectionPointerEnter(collectNode.id);
-    app.handleNodeConnectionPointerUp(collectNode.id, createPointerEvent(220, 240, 7));
-    fixture.detectChanges();
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: startNode.id,
-        targetNodeId: collectNode.id
-      }
-    ]);
-    expect(app.edgePaths()[0]?.path).toBe('M 344 166 C 380 166, 380 166, 416 166');
-    expect(app.connectionDrag()).toBeNull();
-    expect(app.notice().text).toContain('Nodes connected');
-  });
-
-  it('creates a branched connection by dragging from a decision exit', () => {
+  it('allows multiple branches into shared terminal targets', () => {
     clickByTestId('add-decision-node');
     clickByTestId('add-route-node');
 
     const [decisionNode, routeNode] = app.flow().nodes;
     const branchNode = asDecisionNode(decisionNode);
-    const exitId = branchNode.config.exits[0].id;
 
-    app.beginConnectionDrag(createPointerEvent(110, 110, 11), branchNode.id, exitId);
-    app.onWindowPointerMove(createPointerEvent(220, 240, 11));
-    app.handleNodeConnectionPointerEnter(routeNode.id);
-    app.handleNodeConnectionPointerUp(routeNode.id, createPointerEvent(220, 240, 11));
-    fixture.detectChanges();
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
+    clickByTestId(`input-${routeNode.id}`);
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
+    clickByTestId(`input-${routeNode.id}`);
 
     expect(app.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: branchNode.id,
         targetNodeId: routeNode.id,
-        sourceExitId: exitId
+        sourcePortId: branchNode.config.exits[0].id
+      },
+      {
+        id: 'edge-2',
+        sourceNodeId: branchNode.id,
+        targetNodeId: routeNode.id,
+        sourcePortId: branchNode.config.exits[1].id
       }
     ]);
   });
 
-  it('cancels a dragged connection when released away from a valid target', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-collect-node');
-
-    const startNode = app.flow().nodes[0];
-
-    app.beginConnectionDrag(createPointerEvent(110, 110, 8), startNode.id);
-    app.onWindowPointerMove(createPointerEvent(380, 420, 8));
-    app.onWindowPointerUp(createPointerEvent(380, 420, 8));
-    fixture.detectChanges();
-
-    expect(app.flow().edges.length).toBe(0);
-    expect(app.connectionDrag()).toBeNull();
-    expect(app.notice().text).toContain('Connection drag cancelled');
-  });
-
-  it('rejects invalid dragged connections and leaves the flow unchanged', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-collect-node');
-    clickByTestId('add-route-node');
-
-    const [startNode, collectNode, routeNode] = app.flow().nodes;
-
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${collectNode.id}`);
-    expect(app.flow().edges.length).toBe(1);
-
-    app.beginConnectionDrag(createPointerEvent(110, 110, 9), startNode.id);
-    app.onWindowPointerMove(createPointerEvent(420, 260, 9));
-    app.handleNodeConnectionPointerEnter(routeNode.id);
-    app.handleNodeConnectionPointerUp(routeNode.id, createPointerEvent(420, 260, 9));
-    fixture.detectChanges();
-
-    expect(app.flow().edges.length).toBe(1);
-    expect(app.connectionDrag()).toBeNull();
-    expect(app.notice().text).toContain('already has an outgoing connection');
-  });
-
-  it('does not render a start input handle or a route output handle', () => {
-    clickByTestId('add-start-node');
+  it('still rejects a second incoming edge on ordinary nodes', () => {
     clickByTestId('add-decision-node');
-    clickByTestId('add-route-node');
+    clickByTestId('add-collect-node');
 
-    const [startNode, decisionNode, routeNode] = app.flow().nodes;
+    const [decisionNode, collectNode] = app.flow().nodes;
     const branchNode = asDecisionNode(decisionNode);
+
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
+    clickByTestId(`input-${collectNode.id}`);
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
+    clickByTestId(`input-${collectNode.id}`);
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: branchNode.id,
+        targetNodeId: collectNode.id,
+        sourcePortId: branchNode.config.exits[0].id
+      }
+    ]);
+    expect(app.notice().text).toContain('incoming connection');
+  });
+
+  it('creates a connection by dragging from a condition port to a shared fallback node', () => {
+    clickByTestId('add-condition-node');
+    clickByTestId('add-fallback-node');
+
+    const [conditionNode, fallbackNode] = app.flow().nodes;
+    const ruleNode = asConditionNode(conditionNode);
+
+    app.beginConnectionDrag(
+      createPointerEvent(110, 110, 7),
+      ruleNode.id,
+      CONDITION_DEFAULT_PORT_ID
+    );
+    app.onWindowPointerMove(createPointerEvent(220, 240, 7));
+    fixture.detectChanges();
+
+    expect(app.previewEdgePath()).not.toBeNull();
+    expect(getByTestId('preview-edge')).not.toBeNull();
+
+    app.handleNodeConnectionPointerEnter(fallbackNode.id);
+    app.handleNodeConnectionPointerUp(fallbackNode.id, createPointerEvent(220, 240, 7));
+    fixture.detectChanges();
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: ruleNode.id,
+        targetNodeId: fallbackNode.id,
+        sourcePortId: CONDITION_DEFAULT_PORT_ID
+      }
+    ]);
+  });
+
+  it('does not render a start input handle or terminal output handles', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-route-node');
+    clickByTestId('add-handoff-node');
+    clickByTestId('add-end-node');
+
+    const [startNode, routeNode, handoffNode, endNode] = app.flow().nodes;
 
     expect(getByTestId(`input-${startNode.id}`)).toBeNull();
     expect(getByTestId(`output-${routeNode.id}`)).toBeNull();
-    expect(getByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`)).not.toBeNull();
+    expect(getByTestId(`output-${handoffNode.id}`)).toBeNull();
+    expect(getByTestId(`output-${endNode.id}`)).toBeNull();
   });
 
-  it('surfaces a missing route validation issue when no route node exists', () => {
-    app.flow.set({
-      nodes: [
-        {
-          id: 'start-1',
-          type: 'start',
-          position: { x: 96, y: 88 },
-          config: {}
-        }
-      ],
-      edges: []
-    });
-    fixture.detectChanges();
-
-    expect(app.validationIssues().map((issue) => issue.code)).toContain('missing-route');
-  });
-
-  it('surfaces validation issues for duplicates, queue selection, and disconnected nodes', () => {
-    app.flow.set(createFlowWithValidationProblems());
-    app.selectNode('collect-1');
+  it('surfaces validation issues for incomplete phase one nodes and keeps end message optional', () => {
+    app.flow.set(createFlowWithPhaseOneValidationProblems());
+    app.selectNode('condition-1');
     fixture.detectChanges();
 
     const issueCodes = app.validationIssues().map((issue) => issue.code);
 
-    expect(issueCodes).toContain('duplicate-variable-key');
-    expect(issueCodes).toContain('missing-prompt');
-    expect(issueCodes).toContain('missing-queue');
-    expect(issueCodes).toContain('disconnected-node');
-    expect(getByTestId('validation-list')?.textContent).toContain(
-      'Variable keys must be unique'
-    );
+    expect(issueCodes).toContain('missing-send-message');
+    expect(issueCodes).toContain('missing-question-prompt');
+    expect(issueCodes).toContain('missing-question-choices');
+    expect(issueCodes).toContain('missing-condition-variable');
+    expect(issueCodes).toContain('unconnected-condition-default');
+    expect(issueCodes).toContain('missing-fallback-message');
+    expect(issueCodes).toContain('missing-handoff-queue');
+    expect(issueCodes).not.toContain('missing-end-message');
   });
 
-  it('surfaces validation issues for incomplete decision nodes', () => {
-    app.flow.set(createFlowWithDecisionValidationProblems());
-    app.selectNode('decision-1');
-    fixture.detectChanges();
-
-    const issueCodes = app.validationIssues().map((issue) => issue.code);
-
-    expect(issueCodes).toContain('missing-decision-prompt');
-    expect(issueCodes).toContain('missing-decision-exit-label');
-    expect(issueCodes).toContain('duplicate-decision-exit-label');
-    expect(issueCodes).toContain('unconnected-decision-exit');
-    expect(getByTestId('validation-list')?.textContent).toContain(
-      'Decision nodes need a prompt'
-    );
-  });
-
-  it('renders the live JSON preview from the current flow state', async () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-decision-node');
+  it('renders the live JSON preview with sourcePortId', async () => {
+    clickByTestId('add-condition-node');
     clickByTestId('add-route-node');
-    clickByTestId('add-route-node');
+    clickByTestId('add-fallback-node');
 
-    const [, decisionNode] = app.flow().nodes;
-    const branchNode = asDecisionNode(decisionNode);
-    clickByTestId(`output-node-1`);
-    clickByTestId(`input-${branchNode.id}`);
+    const [conditionNode] = app.flow().nodes;
+    const ruleNode = asConditionNode(conditionNode);
+    const firstRule = ruleNode.config.rules[0];
 
-    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
+    clickByTestId(`output-${ruleNode.id}-${firstRule.id}`);
+    clickByTestId('input-node-2');
+    clickByTestId(`output-${ruleNode.id}-${CONDITION_DEFAULT_PORT_ID}`);
     clickByTestId('input-node-3');
-
-    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
-    clickByTestId('input-node-4');
-
-    const routeNodeA = app.flow().nodes[2];
-    app.selectNode(routeNodeA.id);
-    fixture.detectChanges();
-    const firstQueueSelect = getByTestId('queue-select') as HTMLSelectElement;
-    firstQueueSelect.value = 'support-general';
-    firstQueueSelect.dispatchEvent(new Event('change'));
-
-    const routeNodeB = app.flow().nodes[3];
-    app.selectNode(routeNodeB.id);
-    fixture.detectChanges();
-    const secondQueueSelect = getByTestId('queue-select') as HTMLSelectElement;
-    secondQueueSelect.value = 'sales-priority';
-    secondQueueSelect.dispatchEvent(new Event('change'));
-
-    await fixture.whenStable();
-    fixture.detectChanges();
 
     const jsonPreview = getByTestId('json-preview')?.textContent ?? '';
 
-    expect(jsonPreview).toContain('"type": "decision"');
-    expect(jsonPreview).toContain('"sourceExitId"');
-    expect(jsonPreview).toContain('"queueId": "sales-priority"');
+    expect(jsonPreview).toContain('"type": "condition"');
+    expect(jsonPreview).toContain('"type": "fallback"');
+    expect(jsonPreview).toContain('"sourcePortId"');
   });
 
   function getByTestId(testId: string): HTMLElement | null {
@@ -465,9 +540,13 @@ describe('App', () => {
   function getSelectedDecisionNode(): DecisionNode {
     return asDecisionNode(app.selectedNode());
   }
+
+  function getSelectedConditionNode(): ConditionNode {
+    return asConditionNode(app.selectedNode());
+  }
 });
 
-function createFlowWithValidationProblems(): FlowDefinition {
+function createFlowWithPhaseOneValidationProblems(): FlowDefinition {
   return {
     nodes: [
       {
@@ -477,83 +556,64 @@ function createFlowWithValidationProblems(): FlowDefinition {
         config: {}
       },
       {
-        id: 'collect-1',
-        type: 'collect-variable',
+        id: 'send-1',
+        type: 'send-message',
         position: { x: 416, y: 88 },
         config: {
-          variableKey: 'company',
-          prompt: '',
-          required: true
+          message: ''
         }
       },
       {
-        id: 'collect-2',
-        type: 'collect-variable',
+        id: 'ask-1',
+        type: 'ask-question',
         position: { x: 736, y: 88 },
         config: {
-          variableKey: 'company',
-          prompt: 'How many seats do you need?',
-          required: true
+          prompt: '',
+          responseKind: 'single-choice',
+          choices: []
         }
       },
       {
-        id: 'route-1',
-        type: 'route-to-queue',
-        position: { x: 736, y: 308 },
+        id: 'condition-1',
+        type: 'condition',
+        position: { x: 416, y: 308 },
         config: {
-          queueId: '',
-          queueName: ''
-        }
-      }
-    ],
-    edges: [
-      {
-        id: 'edge-1',
-        sourceNodeId: 'start-1',
-        targetNodeId: 'collect-1'
-      }
-    ]
-  };
-}
-
-function createFlowWithDecisionValidationProblems(): FlowDefinition {
-  return {
-    nodes: [
-      {
-        id: 'start-1',
-        type: 'start',
-        position: { x: 96, y: 88 },
-        config: {}
-      },
-      {
-        id: 'decision-1',
-        type: 'decision',
-        position: { x: 416, y: 88 },
-        config: {
-          intentPrompt: '',
-          exits: [
+          defaultPortLabel: '',
+          rules: [
             {
-              id: 'decision-exit-1',
-              label: ''
-            },
-            {
-              id: 'decision-exit-2',
-              label: 'Sales'
-            },
-            {
-              id: 'decision-exit-3',
-              label: 'Sales'
+              id: 'condition-rule-1',
+              label: 'Enterprise',
+              variableKey: '',
+              operator: 'equals',
+              value: ''
             }
           ]
         }
       },
       {
-        id: 'route-1',
-        type: 'route-to-queue',
-        position: { x: 736, y: 88 },
+        id: 'fallback-1',
+        type: 'fallback',
+        position: { x: 736, y: 308 },
         config: {
-          queueId: 'support-general',
-          queueName: 'Support General'
+          message: ''
+        }
+      },
+      {
+        id: 'handoff-1',
+        type: 'human-handoff',
+        position: { x: 1056, y: 308 },
+        config: {
+          queueId: '',
+          queueName: '',
+          transferMessage: ''
+        }
+      },
+      {
+        id: 'end-1',
+        type: 'end-conversation',
+        position: { x: 1056, y: 88 },
+        config: {
+          closingMessage: ''
         }
       }
     ],
@@ -561,13 +621,7 @@ function createFlowWithDecisionValidationProblems(): FlowDefinition {
       {
         id: 'edge-1',
         sourceNodeId: 'start-1',
-        targetNodeId: 'decision-1'
-      },
-      {
-        id: 'edge-2',
-        sourceNodeId: 'decision-1',
-        sourceExitId: 'decision-exit-2',
-        targetNodeId: 'route-1'
+        targetNodeId: 'send-1'
       }
     ]
   };
@@ -596,6 +650,22 @@ function createPointerEvent(
 function asDecisionNode(node: FlowNode | null | undefined): DecisionNode {
   if (!node || node.type !== 'decision') {
     throw new Error('Expected decision node.');
+  }
+
+  return node;
+}
+
+function asConditionNode(node: FlowNode | null | undefined): ConditionNode {
+  if (!node || node.type !== 'condition') {
+    throw new Error('Expected condition node.');
+  }
+
+  return node;
+}
+
+function asAskQuestionNode(node: FlowNode | null | undefined): AskQuestionNode {
+  if (!node || node.type !== 'ask-question') {
+    throw new Error('Expected ask-question node.');
   }
 
   return node;
