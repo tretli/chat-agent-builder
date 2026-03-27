@@ -239,6 +239,8 @@ select {
 
 .canvas-surface {
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .edge-layer {
@@ -295,6 +297,7 @@ select {
 
 .node-card {
   position: absolute;
+  z-index: 1;
   box-sizing: border-box;
   width: 248px;
   min-height: 156px;
@@ -303,6 +306,8 @@ select {
   border-radius: 20px;
   background: linear-gradient(180deg, #ffffff 0%, #f6f7f2 100%);
   box-shadow: 0 18px 32px rgba(22, 44, 69, 0.12);
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     box-shadow 140ms ease,
     border-color 140ms ease;
@@ -321,8 +326,9 @@ select {
 }
 
 .node-selected {
-  border-color: #1f5f8b;
-  box-shadow: 0 0 0 3px rgba(31, 95, 139, 0.16), 0 22px 40px rgba(22, 44, 69, 0.16);
+  z-index: 4;
+  border-color: #0f6ea5;
+  box-shadow: 0 0 0 5px rgba(15, 110, 165, 0.2), 0 24px 48px rgba(11, 51, 85, 0.22);
 }
 
 .node-drop-target {
@@ -367,6 +373,8 @@ select {
   background: #102437;
   color: #f8f3e7;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .drag-handle:active {
@@ -382,6 +390,8 @@ select {
   border-radius: 50%;
   background: #fff4d9;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     transform 120ms ease,
     box-shadow 120ms ease,

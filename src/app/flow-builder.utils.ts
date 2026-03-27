@@ -110,11 +110,16 @@ export function groupIssuesByNode(issues: ValidationIssue[]): Map<string, Valida
 export function wouldCreateCycle(
   flow: FlowDefinition,
   sourceNodeId: string,
-  targetNodeId: string
+  targetNodeId: string,
+  ignoredEdgeId?: string
 ): boolean {
   const adjacency = new Map<string, string[]>();
 
   for (const edge of flow.edges) {
+    if (ignoredEdgeId && edge.id === ignoredEdgeId) {
+      continue;
+    }
+
     const neighbors = adjacency.get(edge.sourceNodeId) ?? [];
     neighbors.push(edge.targetNodeId);
     adjacency.set(edge.sourceNodeId, neighbors);

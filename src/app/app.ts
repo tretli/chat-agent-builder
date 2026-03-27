@@ -37,6 +37,7 @@ import {
   buildEdgePath,
   conditionOperatorRequiresValue,
   findIncomingEdge,
+  findIncomingEdges,
   findNode,
   findOutgoingEdge,
   findOutgoingEdgeForPort,
@@ -89,8 +90,8 @@ type NoticeTone = 'info' | 'success' | 'error';
 export class App {
   @ViewChild('canvasShell') private canvasShell?: ElementRef<HTMLElement>;
 
-  readonly canvasWidth = 1600;
-  readonly canvasHeight = 940;
+  readonly minCanvasWidth = 1600;
+  readonly minCanvasHeight = 940;
   readonly queueOptions = MOCK_QUEUES;
   readonly responseKindOptions = QUESTION_RESPONSE_KIND_OPTIONS;
   readonly conditionOperatorOptions = CONDITION_OPERATOR_OPTIONS;
@@ -125,6 +126,44 @@ export class App {
   readonly hasStartNode = computed(() =>
     this.flow().nodes.some((node) => node.type === 'start')
   );
+  readonly canvasWidth = computed(() => {
+    let maxWidth = this.minCanvasWidth;
+
+    for (const node of this.flow().nodes) {
+      maxWidth = Math.max(maxWidth, node.position.x + NODE_WIDTH + 120);
+    }
+
+    const connectionDrag = this.connectionDrag();
+
+    if (connectionDrag) {
+      maxWidth = Math.max(
+        maxWidth,
+        connectionDrag.startPosition.x + 120,
+        connectionDrag.currentPosition.x + 120
+      );
+    }
+
+    return maxWidth;
+  });
+  readonly canvasHeight = computed(() => {
+    let maxHeight = this.minCanvasHeight;
+
+    for (const node of this.flow().nodes) {
+      maxHeight = Math.max(maxHeight, node.position.y + this.getNodeHeight(node) + 120);
+    }
+
+    const connectionDrag = this.connectionDrag();
+
+    if (connectionDrag) {
+      maxHeight = Math.max(
+        maxHeight,
+        connectionDrag.startPosition.y + 120,
+        connectionDrag.currentPosition.y + 120
+      );
+    }
+
+    return maxHeight;
+  });
   readonly flowJson = computed(() => JSON.stringify(this.flow(), null, 2));
   readonly edgePaths = computed(() => {
     const flow = this.flow();
@@ -297,16 +336,13 @@ export class App {
       (event.pointerId ?? this.dragState.pointerId) === this.dragState.pointerId
     ) {
       const node = findNode(this.flow(), this.dragState.nodeId);
-      const nodeHeight = node ? this.getNodeHeight(node) : NODE_HEIGHT;
-      const nextX = this.clamp(
+      const nextX = Math.max(
         this.dragState.originX + (event.clientX - this.dragState.startX),
-        24,
-        this.canvasWidth - NODE_WIDTH - 24
+        24
       );
-      const nextY = this.clamp(
+      const nextY = Math.max(
         this.dragState.originY + (event.clientY - this.dragState.startY),
-        24,
-        this.canvasHeight - nodeHeight - 24
+        24
       );
 
       this.updateNode(this.dragState.nodeId, (currentNode) => ({
@@ -1311,6 +1347,16 @@ export class App {
     }));
   }
 
+  private getExistingSourceEdge(
+    flow: FlowDefinition,
+    sourceNodeId: string,
+    sourcePortId: string | null
+  ): FlowEdge | undefined {
+    return sourcePortId
+      ? findOutgoingEdgeForPort(flow, sourceNodeId, sourcePortId)
+      : findOutgoingEdge(flow, sourceNodeId);
+  }
+
   private validateConnection(
     sourceNodeId: string,
     targetNodeId: string,
@@ -1319,6 +1365,7 @@ export class App {
     const flow = this.flow();
     const sourceNode = findNode(flow, sourceNodeId);
     const targetNode = findNode(flow, targetNodeId);
+    const existingSourceEdge = this.getExistingSourceEdge(flow, sourceNodeId, sourcePortId);
 
     if (!sourceNode || !targetNode) {
       return {
@@ -1356,27 +1403,34 @@ export class App {
         };
       }
 
-      if (findOutgoingEdgeForPort(flow, sourceNodeId, sourcePortId)) {
+      if (
+        findOutgoingEdgeForPort(flow, sourceNodeId, sourcePortId) &&
+        !existingSourceEdge
+      ) {
         return {
           ok: false,
           message: 'That branch is already connected to another node.'
         };
       }
-    } else if (findOutgoingEdge(flow, sourceNodeId)) {
+    } else if (findOutgoingEdge(flow, sourceNodeId) && !existingSourceEdge) {
       return {
         ok: false,
         message: 'This node already has an outgoing connection.'
       };
     }
 
-    if (!allowsMultipleIncoming(targetNode) && findIncomingEdge(flow, targetNodeId)) {
+    const competingIncomingEdges = findIncomingEdges(flow, targetNodeId).filter(
+      (edge) => edge.id !== existingSourceEdge?.id
+    );
+
+    if (!allowsMultipleIncoming(targetNode) && competingIncomingEdges.length > 0) {
       return {
         ok: false,
         message: 'This node already has an incoming connection.'
       };
     }
 
-    if (wouldCreateCycle(flow, sourceNodeId, targetNodeId)) {
+    if (wouldCreateCycle(flow, sourceNodeId, targetNodeId, existingSourceEdge?.id)) {
       return {
         ok: false,
         message: 'That connection would create a loop in the flow.'
@@ -1394,6 +1448,8 @@ export class App {
     targetNodeId: string,
     sourcePortId: string | null
   ): void {
+    const flow = this.flow();
+    const existingSourceEdge = this.getExistingSourceEdge(flow, sourceNodeId, sourcePortId);
     const validation = this.validateConnection(sourceNodeId, targetNodeId, sourcePortId);
 
     if (!validation.ok) {
@@ -1403,22 +1459,33 @@ export class App {
       return;
     }
 
-    const flow = this.flow();
-    const nextEdge: FlowEdge = {
-      id: `edge-${this.nextEdgeId++}`,
-      sourceNodeId,
-      targetNodeId,
-      ...(sourcePortId ? { sourcePortId } : {})
-    };
-
     this.flow.set({
       nodes: flow.nodes,
-      edges: [...flow.edges, nextEdge]
+      edges: existingSourceEdge
+        ? flow.edges.map((edge) =>
+            edge.id === existingSourceEdge.id
+              ? {
+                  ...edge,
+                  sourceNodeId,
+                  targetNodeId,
+                  ...(sourcePortId ? { sourcePortId } : {})
+                }
+              : edge
+          )
+        : [
+            ...flow.edges,
+            {
+              id: `edge-${this.nextEdgeId++}`,
+              sourceNodeId,
+              targetNodeId,
+              ...(sourcePortId ? { sourcePortId } : {})
+            } satisfies FlowEdge
+          ]
     });
     this.connectionDrag.set(null);
     this.pendingConnectionSource.set(null);
     this.selectedNodeId.set(targetNodeId);
-    this.setNotice('Nodes connected.', 'success');
+    this.setNotice(existingSourceEdge ? 'Connection rewired.' : 'Nodes connected.', 'success');
   }
 
   private cancelConnectionSelection(showNotice: boolean): void {
@@ -1456,8 +1523,8 @@ export class App {
     const rect = canvasShell.getBoundingClientRect();
 
     return {
-      x: this.clamp(clientX - rect.left + canvasShell.scrollLeft, 0, this.canvasWidth),
-      y: this.clamp(clientY - rect.top + canvasShell.scrollTop, 0, this.canvasHeight)
+      x: Math.max(clientX - rect.left + canvasShell.scrollLeft, 0),
+      y: Math.max(clientY - rect.top + canvasShell.scrollTop, 0)
     };
   }
 

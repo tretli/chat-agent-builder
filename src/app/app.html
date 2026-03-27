@@ -179,14 +179,14 @@
       >
         <div
           class="canvas-surface"
-          [style.width.px]="canvasWidth"
-          [style.height.px]="canvasHeight"
+          [style.width.px]="canvasWidth()"
+          [style.height.px]="canvasHeight()"
         >
           <svg
             class="edge-layer"
-            [attr.viewBox]="'0 0 ' + canvasWidth + ' ' + canvasHeight"
-            [attr.width]="canvasWidth"
-            [attr.height]="canvasHeight"
+            [attr.viewBox]="'0 0 ' + canvasWidth() + ' ' + canvasHeight()"
+            [attr.width]="canvasWidth()"
+            [attr.height]="canvasHeight()"
           >
             @for (edge of edgePaths(); track edge.id) {
               <path class="edge-path" [attr.d]="edge.path"></path>
@@ -253,7 +253,6 @@
                 </div>
 
                 <h3>{{ getNodeHeadline(node) }}</h3>
-                <p>{{ getNodeSummary(node) }}</p>
 
                 @if (isMultiPortNode(node)) {
                   <div class="port-list">
