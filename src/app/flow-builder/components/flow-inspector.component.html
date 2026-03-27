@@ -1,0 +1,55 @@
+<div class="panel-heading">
+  <h2>Inspector</h2>
+  <span>Selected node</span>
+</div>
+
+@if (store.selectedNode(); as node) {
+  <div class="inspector-stack">
+    <div class="inspector-intro">
+      <p class="eyebrow">{{ getNodeTitle(node.type) }}</p>
+      <h3 data-testid="inspector-title">{{ getNodeHeadline(node) }}</h3>
+      <p>{{ getNodeSummary(node) }}</p>
+    </div>
+
+    @switch (node.type) {
+      @case ('start') {
+        <app-start-node-editor [node]="node"></app-start-node-editor>
+      }
+      @case ('send-message') {
+        <app-send-message-node-editor [node]="node"></app-send-message-node-editor>
+      }
+      @case ('ask-question') {
+        <app-ask-question-node-editor [node]="node"></app-ask-question-node-editor>
+      }
+      @case ('collect-variable') {
+        <app-collect-variable-node-editor [node]="node"></app-collect-variable-node-editor>
+      }
+      @case ('decision') {
+        <app-decision-node-editor [node]="node"></app-decision-node-editor>
+      }
+      @case ('condition') {
+        <app-condition-node-editor [node]="node"></app-condition-node-editor>
+      }
+      @case ('fallback') {
+        <app-fallback-node-editor [node]="node"></app-fallback-node-editor>
+      }
+      @case ('route-to-queue') {
+        <app-route-to-queue-node-editor [node]="node"></app-route-to-queue-node-editor>
+      }
+      @case ('human-handoff') {
+        <app-human-handoff-node-editor [node]="node"></app-human-handoff-node-editor>
+      }
+      @case ('end-conversation') {
+        <app-end-conversation-node-editor [node]="node"></app-end-conversation-node-editor>
+      }
+      @default {
+        <app-phase-two-placeholder-editor></app-phase-two-placeholder-editor>
+      }
+    }
+  </div>
+} @else {
+  <div class="empty-panel">
+    <h3>No node selected</h3>
+    <p>Select a node on the canvas to edit its configuration.</p>
+  </div>
+}

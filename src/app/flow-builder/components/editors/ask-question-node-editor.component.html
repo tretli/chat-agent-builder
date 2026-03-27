@@ -1,0 +1,40 @@
+<div class="field-group">
+  <label for="ask-prompt">Prompt</label>
+  <textarea
+    id="ask-prompt"
+    rows="4"
+    data-testid="ask-prompt-input"
+    [ngModel]="node().config.prompt"
+    (ngModelChange)="store.updateSelectedAskPrompt($event)"
+    placeholder="What are you hoping to get help with today?"
+  ></textarea>
+</div>
+
+<div class="field-group">
+  <label for="ask-response-kind">Response kind</label>
+  <select
+    id="ask-response-kind"
+    data-testid="ask-response-kind-select"
+    [ngModel]="node().config.responseKind"
+    (ngModelChange)="store.updateSelectedAskResponseKind($event)"
+  >
+    @for (option of store.responseKindOptions; track option.id) {
+      <option [value]="option.id">{{ option.label }}</option>
+    }
+  </select>
+</div>
+
+@if (node().config.responseKind === 'single-choice') {
+  <div class="field-group">
+    <label for="ask-choice-list">Choices</label>
+    <textarea
+      id="ask-choice-list"
+      rows="4"
+      data-testid="ask-choice-list-input"
+      [ngModel]="getAskChoiceText(node())"
+      (ngModelChange)="store.updateSelectedAskChoices($event)"
+      placeholder="Sales&#10;Support&#10;Billing"
+    ></textarea>
+    <p class="field-copy">Use one option per line.</p>
+  </div>
+}

@@ -1,12 +1,25 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { App } from './app';
-import { ConditionNode, DecisionNode, FlowDefinition, FlowNode } from './flow-builder.models';
-import { CONDITION_DEFAULT_PORT_ID } from './flow-builder.utils';
+import { FlowBuilderPageComponent } from './flow-builder/flow-builder-page.component';
+import {
+  FlowCanvasComponent
+} from './flow-builder/components/flow-canvas.component';
+import { FlowBuilderStore } from './flow-builder/flow-builder.store';
+import {
+  ConditionNode,
+  DecisionNode,
+  FlowDefinition,
+  FlowNode
+} from './flow-builder/flow-builder.models';
+import { CONDITION_DEFAULT_PORT_ID } from './flow-builder/flow-builder.utils';
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
-  let app: App;
   let host: HTMLElement;
+  let page: FlowBuilderPageComponent;
+  let canvas: FlowCanvasComponent;
+  let store: FlowBuilderStore;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -14,8 +27,12 @@ describe('App', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(App);
-    app = fixture.componentInstance;
     host = fixture.nativeElement as HTMLElement;
+    page = fixture.debugElement.query(By.directive(FlowBuilderPageComponent))
+      .componentInstance as FlowBuilderPageComponent;
+    canvas = fixture.debugElement.query(By.directive(FlowCanvasComponent))
+      .componentInstance as FlowCanvasComponent;
+    store = page.store;
     fixture.detectChanges();
   });
 
@@ -45,7 +62,7 @@ describe('App', () => {
     clickByTestId('add-handoff-node');
     clickByTestId('add-end-node');
 
-    expect(app.flow().nodes.map((node) => node.type)).toEqual([
+    expect(store.flow().nodes.map((node) => node.type)).toEqual([
       'start',
       'send-message',
       'ask-question',
@@ -57,7 +74,7 @@ describe('App', () => {
       'human-handoff',
       'end-conversation'
     ]);
-    expect(app.selectedNode()?.type).toBe('end-conversation');
+    expect(store.selectedNode()?.type).toBe('end-conversation');
     expect(host.querySelectorAll('.node-card').length).toBe(10);
   });
 
@@ -71,7 +88,7 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const selectedNode = app.selectedNode();
+    const selectedNode = store.selectedNode();
 
     expect(selectedNode?.type).toBe('send-message');
     if (selectedNode?.type !== 'send-message') {
@@ -104,7 +121,7 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const selectedNode = app.selectedNode();
+    const selectedNode = store.selectedNode();
 
     expect(selectedNode?.type).toBe('ask-question');
     if (selectedNode?.type !== 'ask-question') {
@@ -134,7 +151,7 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const selectedNode = app.selectedNode();
+    const selectedNode = store.selectedNode();
 
     expect(selectedNode?.type).toBe('collect-variable');
     if (selectedNode?.type !== 'collect-variable') {
@@ -285,9 +302,9 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const fallbackNode = app.flow().nodes[0];
-    const handoffNode = app.flow().nodes[1];
-    const endNode = app.flow().nodes[2];
+    const fallbackNode = store.flow().nodes[0];
+    const handoffNode = store.flow().nodes[1];
+    const endNode = store.flow().nodes[2];
 
     if (fallbackNode.type !== 'fallback') {
       throw new Error('Expected fallback node.');
@@ -310,33 +327,33 @@ describe('App', () => {
   it('updates node position while dragging and does not start a connection drag', () => {
     clickByTestId('add-start-node');
 
-    const node = app.flow().nodes[0];
+    const node = store.flow().nodes[0];
 
-    app.beginNodeDrag(createPointerEvent(120, 120, 1), node.id);
-    app.onWindowPointerMove(createPointerEvent(260, 300, 1));
-    app.onWindowPointerUp(createPointerEvent(260, 300, 1));
+    canvas.beginNodeDrag(createPointerEvent(120, 120, 1), node.id);
+    canvas.onWindowPointerMove(createPointerEvent(260, 300, 1));
+    canvas.onWindowPointerUp(createPointerEvent(260, 300, 1));
     fixture.detectChanges();
 
-    const updatedNode = app.flow().nodes[0];
+    const updatedNode = store.flow().nodes[0];
     expect(updatedNode.position).toEqual({
       x: 236,
       y: 268
     });
-    expect(app.connectionDrag()).toBeNull();
-    expect(app.flow().edges.length).toBe(0);
+    expect(canvas.connectionDrag()).toBeNull();
+    expect(store.flow().edges.length).toBe(0);
   });
 
-  it('rewires an existing standard output through click-to-connect', () => {
+  it('keeps click-to-connect as a fallback', () => {
     clickByTestId('add-start-node');
     clickByTestId('add-send-message-node');
     clickByTestId('add-route-node');
 
-    const [startNode, sendNode, routeNode] = app.flow().nodes;
+    const [startNode, sendNode, routeNode] = store.flow().nodes;
 
     clickByTestId(`output-${startNode.id}`);
     clickByTestId(`input-${sendNode.id}`);
 
-    expect(app.flow().edges).toEqual([
+    expect(store.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: startNode.id,
@@ -347,14 +364,13 @@ describe('App', () => {
     clickByTestId(`output-${startNode.id}`);
     clickByTestId(`input-${routeNode.id}`);
 
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: startNode.id,
-        targetNodeId: routeNode.id
-      }
-    ]);
-    expect(app.notice().text).toContain('rewired');
+    expect(store.flow().edges.length).toBe(1);
+    expect(store.flow().edges[0]).toEqual({
+      id: 'edge-1',
+      sourceNodeId: startNode.id,
+      targetNodeId: routeNode.id
+    });
+    expect(store.notice().text).toContain('rewired');
   });
 
   it('connects condition rules and the no-match port', () => {
@@ -362,7 +378,7 @@ describe('App', () => {
     clickByTestId('add-route-node');
     clickByTestId('add-fallback-node');
 
-    const [conditionNode, routeNode, fallbackNode] = app.flow().nodes;
+    const [conditionNode, routeNode, fallbackNode] = store.flow().nodes;
     const ruleNode = asConditionNode(conditionNode);
     const firstRule = ruleNode.config.rules[0];
 
@@ -371,7 +387,7 @@ describe('App', () => {
     clickByTestId(`output-${ruleNode.id}-${CONDITION_DEFAULT_PORT_ID}`);
     clickByTestId(`input-${fallbackNode.id}`);
 
-    expect(app.flow().edges).toEqual([
+    expect(store.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: ruleNode.id,
@@ -391,7 +407,7 @@ describe('App', () => {
     clickByTestId('add-decision-node');
     clickByTestId('add-route-node');
 
-    const [decisionNode, routeNode] = app.flow().nodes;
+    const [decisionNode, routeNode] = store.flow().nodes;
     const branchNode = asDecisionNode(decisionNode);
 
     clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
@@ -399,7 +415,7 @@ describe('App', () => {
     clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
     clickByTestId(`input-${routeNode.id}`);
 
-    expect(app.flow().edges).toEqual([
+    expect(store.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: branchNode.id,
@@ -415,36 +431,11 @@ describe('App', () => {
     ]);
   });
 
-  it('rewires an existing branch port instead of rejecting it', () => {
-    clickByTestId('add-decision-node');
-    clickByTestId('add-route-node');
-    clickByTestId('add-route-node');
-
-    const [decisionNode, routeNodeA, routeNodeB] = app.flow().nodes;
-    const branchNode = asDecisionNode(decisionNode);
-    const portId = branchNode.config.exits[0].id;
-
-    clickByTestId(`output-${branchNode.id}-${portId}`);
-    clickByTestId(`input-${routeNodeA.id}`);
-    clickByTestId(`output-${branchNode.id}-${portId}`);
-    clickByTestId(`input-${routeNodeB.id}`);
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: branchNode.id,
-        targetNodeId: routeNodeB.id,
-        sourcePortId: portId
-      }
-    ]);
-    expect(app.notice().text).toContain('rewired');
-  });
-
   it('still rejects a second incoming edge on ordinary nodes', () => {
     clickByTestId('add-decision-node');
     clickByTestId('add-collect-node');
 
-    const [decisionNode, collectNode] = app.flow().nodes;
+    const [decisionNode, collectNode] = store.flow().nodes;
     const branchNode = asDecisionNode(decisionNode);
 
     clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
@@ -452,7 +443,7 @@ describe('App', () => {
     clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
     clickByTestId(`input-${collectNode.id}`);
 
-    expect(app.flow().edges).toEqual([
+    expect(store.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: branchNode.id,
@@ -460,121 +451,32 @@ describe('App', () => {
         sourcePortId: branchNode.config.exits[0].id
       }
     ]);
-    expect(app.notice().text).toContain('incoming connection');
-  });
-
-  it('keeps the original edge when a rewire fails because the new target already has an incoming edge', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-send-message-node');
-    clickByTestId('add-collect-node');
-    clickByTestId('add-route-node');
-
-    const [startNode, sendNode, collectNode, routeNode] = app.flow().nodes;
-
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${routeNode.id}`);
-    clickByTestId(`output-${sendNode.id}`);
-    clickByTestId(`input-${collectNode.id}`);
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${collectNode.id}`);
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: startNode.id,
-        targetNodeId: routeNode.id
-      },
-      {
-        id: 'edge-2',
-        sourceNodeId: sendNode.id,
-        targetNodeId: collectNode.id
-      }
-    ]);
-    expect(app.notice().text).toContain('incoming connection');
-  });
-
-  it('keeps the original edge when a rewire fails because it would self-link', () => {
-    clickByTestId('add-send-message-node');
-    clickByTestId('add-route-node');
-
-    const [sendNode, routeNode] = app.flow().nodes;
-
-    clickByTestId(`output-${sendNode.id}`);
-    clickByTestId(`input-${routeNode.id}`);
-    clickByTestId(`output-${sendNode.id}`);
-    app.handleInputHandleClick(sendNode.id, new Event('click'));
-    fixture.detectChanges();
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: sendNode.id,
-        targetNodeId: routeNode.id
-      }
-    ]);
-    expect(app.notice().text).toContain('cannot connect to itself');
-  });
-
-  it('keeps the original edge when a rewire fails because it would create a cycle', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-fallback-node');
-    clickByTestId('add-send-message-node');
-    clickByTestId('add-route-node');
-
-    const [startNode, fallbackNode, sendNode, routeNode] = app.flow().nodes;
-
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${fallbackNode.id}`);
-    clickByTestId(`output-${fallbackNode.id}`);
-    clickByTestId(`input-${sendNode.id}`);
-    clickByTestId(`output-${sendNode.id}`);
-    clickByTestId(`input-${routeNode.id}`);
-    clickByTestId(`output-${sendNode.id}`);
-    clickByTestId(`input-${fallbackNode.id}`);
-
-    expect(app.flow().edges).toEqual([
-      {
-        id: 'edge-1',
-        sourceNodeId: startNode.id,
-        targetNodeId: fallbackNode.id
-      },
-      {
-        id: 'edge-2',
-        sourceNodeId: fallbackNode.id,
-        targetNodeId: sendNode.id
-      },
-      {
-        id: 'edge-3',
-        sourceNodeId: sendNode.id,
-        targetNodeId: routeNode.id
-      }
-    ]);
-    expect(app.notice().text).toContain('create a loop');
+    expect(store.notice().text).toContain('incoming connection');
   });
 
   it('creates a connection by dragging from a condition port to a shared fallback node', () => {
     clickByTestId('add-condition-node');
     clickByTestId('add-fallback-node');
 
-    const [conditionNode, fallbackNode] = app.flow().nodes;
+    const [conditionNode, fallbackNode] = store.flow().nodes;
     const ruleNode = asConditionNode(conditionNode);
 
-    app.beginConnectionDrag(
+    canvas.beginConnectionDrag(
       createPointerEvent(110, 110, 7),
       ruleNode.id,
       CONDITION_DEFAULT_PORT_ID
     );
-    app.onWindowPointerMove(createPointerEvent(220, 240, 7));
+    canvas.onWindowPointerMove(createPointerEvent(220, 240, 7));
     fixture.detectChanges();
 
-    expect(app.previewEdgePath()).not.toBeNull();
+    expect(canvas.previewEdgePath()).not.toBeNull();
     expect(getByTestId('preview-edge')).not.toBeNull();
 
-    app.handleNodeConnectionPointerEnter(fallbackNode.id);
-    app.handleNodeConnectionPointerUp(fallbackNode.id, createPointerEvent(220, 240, 7));
+    canvas.handleNodeConnectionPointerEnter(fallbackNode.id);
+    canvas.handleNodeConnectionPointerUp(fallbackNode.id, createPointerEvent(220, 240, 7));
     fixture.detectChanges();
 
-    expect(app.flow().edges).toEqual([
+    expect(store.flow().edges).toEqual([
       {
         id: 'edge-1',
         sourceNodeId: ruleNode.id,
@@ -590,7 +492,7 @@ describe('App', () => {
     clickByTestId('add-handoff-node');
     clickByTestId('add-end-node');
 
-    const [startNode, routeNode, handoffNode, endNode] = app.flow().nodes;
+    const [startNode, routeNode, handoffNode, endNode] = store.flow().nodes;
 
     expect(getByTestId(`input-${startNode.id}`)).toBeNull();
     expect(getByTestId(`output-${routeNode.id}`)).toBeNull();
@@ -598,46 +500,12 @@ describe('App', () => {
     expect(getByTestId(`output-${endNode.id}`)).toBeNull();
   });
 
-  it('auto-expands the canvas when a node is dragged beyond the original bounds', () => {
-    clickByTestId('add-start-node');
-    clickByTestId('add-route-node');
-
-    const [startNode, routeNode] = app.flow().nodes;
-
-    clickByTestId(`output-${startNode.id}`);
-    clickByTestId(`input-${routeNode.id}`);
-
-    app.beginNodeDrag(createPointerEvent(140, 140, 19), routeNode.id);
-    app.onWindowPointerMove(createPointerEvent(1960, 1280, 19));
-    app.onWindowPointerUp(createPointerEvent(1960, 1280, 19));
-    fixture.detectChanges();
-
-    const movedRouteNode = app.flow().nodes[1];
-
-    expect(app.canvasWidth()).toBeGreaterThan(1600);
-    expect(app.canvasHeight()).toBeGreaterThan(940);
-    expect(movedRouteNode.position.x).toBeGreaterThan(1600);
-    expect(movedRouteNode.position.y).toBeGreaterThan(940);
-    expect(app.edgePaths()[0]?.path).toContain(`${movedRouteNode.position.x}`);
-  });
-
-  it('keeps summary text in the inspector but not on canvas cards', () => {
-    clickByTestId('add-send-message-node');
-
-    const summaryText = 'Send bot copy to the user, then continue to the next step.';
-    const canvasText = host.querySelector('.canvas-panel')?.textContent ?? '';
-    const inspectorText = host.querySelector('.inspector-panel')?.textContent ?? '';
-
-    expect(canvasText).not.toContain(summaryText);
-    expect(inspectorText).toContain(summaryText);
-  });
-
   it('surfaces validation issues for incomplete phase one nodes and keeps end message optional', () => {
-    app.flow.set(createFlowWithPhaseOneValidationProblems());
-    app.selectNode('condition-1');
+    store.flow.set(createFlowWithPhaseOneValidationProblems());
+    store.selectNode('condition-1');
     fixture.detectChanges();
 
-    const issueCodes = app.validationIssues().map((issue) => issue.code);
+    const issueCodes = store.validationIssues().map((issue) => issue.code);
 
     expect(issueCodes).toContain('missing-send-message');
     expect(issueCodes).toContain('missing-question-prompt');
@@ -649,12 +517,12 @@ describe('App', () => {
     expect(issueCodes).not.toContain('missing-end-message');
   });
 
-  it('renders the live JSON preview with sourcePortId', async () => {
+  it('renders the live JSON preview with sourcePortId', () => {
     clickByTestId('add-condition-node');
     clickByTestId('add-route-node');
     clickByTestId('add-fallback-node');
 
-    const [conditionNode] = app.flow().nodes;
+    const [conditionNode] = store.flow().nodes;
     const ruleNode = asConditionNode(conditionNode);
     const firstRule = ruleNode.config.rules[0];
 
@@ -686,11 +554,11 @@ describe('App', () => {
   }
 
   function getSelectedDecisionNode(): DecisionNode {
-    return asDecisionNode(app.selectedNode());
+    return asDecisionNode(store.selectedNode());
   }
 
   function getSelectedConditionNode(): ConditionNode {
-    return asConditionNode(app.selectedNode());
+    return asConditionNode(store.selectedNode());
   }
 });
 

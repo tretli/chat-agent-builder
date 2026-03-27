@@ -1,0 +1,19 @@
+<div class="field-group">
+  <label for="queue-select">Destination queue</label>
+  <select
+    id="queue-select"
+    data-testid="queue-select"
+    [ngModel]="node().config.queueId"
+    (ngModelChange)="store.updateSelectedQueue($event)"
+  >
+    <option value="">Select a queue</option>
+    @for (queue of store.queueOptions; track queue.id) {
+      <option [value]="queue.id">{{ queue.name }}</option>
+    }
+  </select>
+</div>
+
+<div class="field-group">
+  <label>Queue detail</label>
+  <p class="field-copy">{{ getQueueDescription(node(), store.queueOptions) }}</p>
+</div>

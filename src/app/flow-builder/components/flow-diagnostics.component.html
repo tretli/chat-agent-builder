@@ -1,0 +1,26 @@
+<div class="panel-heading">
+  <h2>Validation</h2>
+  <span>{{ store.validationIssues().length }} issue{{ store.validationIssues().length === 1 ? '' : 's' }}</span>
+</div>
+
+@if (store.validationIssues().length) {
+  <ul class="issue-list" data-testid="validation-list">
+    @for (issue of store.validationIssues(); track trackByIssue($index, issue)) {
+      <li>{{ issue.message }}</li>
+    }
+  </ul>
+} @else {
+  <div class="valid-state">
+    <h3>Flow is structurally valid</h3>
+    <p>The current sequence has a start, a terminal outcome, and no validation errors.</p>
+  </div>
+}
+
+<div class="json-panel">
+  <div class="panel-heading">
+    <h2>JSON Preview</h2>
+    <span>Read only</span>
+  </div>
+
+  <pre data-testid="json-preview">{{ store.flowJson() }}</pre>
+</div>

@@ -1,0 +1,50 @@
+<div class="field-group">
+  <label for="decision-prompt">Intent prompt</label>
+  <textarea
+    id="decision-prompt"
+    rows="4"
+    data-testid="decision-prompt-input"
+    [ngModel]="node().config.intentPrompt"
+    (ngModelChange)="store.updateSelectedDecisionPrompt($event)"
+    placeholder="Describe how the AI should decide which exit matches the user's goal."
+  ></textarea>
+</div>
+
+<div class="field-group">
+  <label>Defined exits</label>
+  <div class="editor-list">
+    @for (exit of node().config.exits; track exit.id) {
+      <div class="editor-row">
+        <div class="editor-field">
+          <span class="editor-label">Exit {{ $index + 1 }}</span>
+          <input
+            type="text"
+            [attr.data-testid]="'decision-exit-input-' + exit.id"
+            [ngModel]="exit.label"
+            (ngModelChange)="store.updateDecisionExitLabel(exit.id, $event)"
+            [placeholder]="'Option ' + ($index + 1)"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="inline-action"
+          [disabled]="!canRemoveDecisionExit(node())"
+          [attr.data-testid]="'remove-decision-exit-' + exit.id"
+          (click)="store.removeDecisionExit(exit.id)"
+        >
+          Remove
+        </button>
+      </div>
+    }
+  </div>
+</div>
+
+<button
+  type="button"
+  class="secondary-action"
+  data-testid="add-decision-exit"
+  (click)="store.addDecisionExit()"
+>
+  Add exit
+</button>

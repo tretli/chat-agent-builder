@@ -1,0 +1,12 @@
+<div class="field-group">
+  <label for="end-message">Closing message</label>
+  <textarea
+    id="end-message"
+    rows="4"
+    data-testid="end-message-input"
+    [ngModel]="node().config.closingMessage"
+    (ngModelChange)="store.updateSelectedClosingMessage($event)"
+    placeholder="Thanks for chatting with us today."
+  ></textarea>
+  <p class="field-copy">Optional. Leave blank if the flow should simply end.</p>
+</div>

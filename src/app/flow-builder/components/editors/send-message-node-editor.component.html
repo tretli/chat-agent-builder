@@ -1,0 +1,11 @@
+<div class="field-group">
+  <label for="send-message">Message</label>
+  <textarea
+    id="send-message"
+    rows="4"
+    data-testid="send-message-input"
+    [ngModel]="node().config.message"
+    (ngModelChange)="store.updateSelectedSendMessage($event)"
+    placeholder="Welcome! I can help route you to the right team."
+  ></textarea>
+</div>

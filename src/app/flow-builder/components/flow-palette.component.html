@@ -1,0 +1,137 @@
+<div class="panel-heading">
+  <h2>Palette</h2>
+  <span>Phase 1 modules</span>
+</div>
+
+<div class="palette-section">
+  <span class="palette-section-label">Start</span>
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-start-node"
+    [disabled]="store.hasStartNode()"
+    (click)="store.addNode('start')"
+  >
+    <span class="palette-title">Start</span>
+    <span class="palette-copy">Create the entry point for the chat sequence.</span>
+  </button>
+</div>
+
+<div class="palette-section">
+  <span class="palette-section-label">Messaging</span>
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-send-message-node"
+    (click)="store.addNode('send-message')"
+  >
+    <span class="palette-title">Send Message</span>
+    <span class="palette-copy">Let the bot speak before the flow moves on.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-ask-question-node"
+    (click)="store.addNode('ask-question')"
+  >
+    <span class="palette-title">Ask Question</span>
+    <span class="palette-copy">Collect transient conversational context without storing a named variable.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-collect-node"
+    (click)="store.addNode('collect-variable')"
+  >
+    <span class="palette-title">Collect Variable</span>
+    <span class="palette-copy">Capture a reusable variable like company, team size, or use case.</span>
+  </button>
+</div>
+
+<div class="palette-section">
+  <span class="palette-section-label">Logic</span>
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-decision-node"
+    (click)="store.addNode('decision')"
+  >
+    <span class="palette-title">Decision</span>
+    <span class="palette-copy">Branch by user intent with multiple labeled exits.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-condition-node"
+    (click)="store.addNode('condition')"
+  >
+    <span class="palette-title">Condition</span>
+    <span class="palette-copy">Branch on known variables and keep a no-match path ready.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-fallback-node"
+    (click)="store.addNode('fallback')"
+  >
+    <span class="palette-title">Fallback</span>
+    <span class="palette-copy">Handle unclear answers or no-match cases before continuing.</span>
+  </button>
+</div>
+
+<div class="palette-section">
+  <span class="palette-section-label">Routing & End</span>
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-route-node"
+    (click)="store.addNode('route-to-queue')"
+  >
+    <span class="palette-title">Route to Queue</span>
+    <span class="palette-copy">End the flow by choosing which queue receives the chat.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-handoff-node"
+    (click)="store.addNode('human-handoff')"
+  >
+    <span class="palette-title">Human Handoff</span>
+    <span class="palette-copy">Escalate to a human queue with transfer context.</span>
+  </button>
+
+  <button
+    type="button"
+    class="palette-card"
+    data-testid="add-end-node"
+    (click)="store.addNode('end-conversation')"
+  >
+    <span class="palette-title">End Conversation</span>
+    <span class="palette-copy">Close the chat cleanly with an optional final message.</span>
+  </button>
+</div>
+
+<div class="palette-section palette-section-advanced">
+  <span class="palette-section-label">Advanced</span>
+  <div class="palette-coming-soon">
+    <span>Set Variable</span>
+    <span>API Lookup</span>
+    <span>Knowledge Answer</span>
+  </div>
+  <p class="field-copy">
+    These Phase 2 modules are specified next, but Phase 1 focuses on the routing and handoff flow.
+  </p>
+</div>
+
+<div class="palette-note">
+  <h3>Flow rules</h3>
+  <p>
+    Most nodes still take one incoming edge, but fallback and terminal targets can be shared by
+    multiple branches.
+  </p>
+</div>

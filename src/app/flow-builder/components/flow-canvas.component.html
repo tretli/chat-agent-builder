@@ -1,0 +1,151 @@
+<div class="panel-heading">
+  <div>
+    <h2>Canvas</h2>
+    <p [class.notice-error]="store.notice().tone === 'error'" [class.notice-success]="store.notice().tone === 'success'">
+      {{ store.notice().text }}
+    </p>
+  </div>
+
+  <button
+    type="button"
+    class="ghost-action"
+    [disabled]="!store.selectedNode()"
+    data-testid="delete-selected-node"
+    (click)="removeSelectedNode()"
+  >
+    Delete selected
+  </button>
+</div>
+
+<div
+  #canvasShell
+  class="canvas-shell"
+  data-testid="canvas-shell"
+  (click)="clearCanvasSelection()"
+>
+  <div
+    class="canvas-surface"
+    [style.width.px]="canvasWidth()"
+    [style.height.px]="canvasHeight()"
+  >
+    <svg
+      class="edge-layer"
+      [attr.viewBox]="'0 0 ' + canvasWidth() + ' ' + canvasHeight()"
+      [attr.width]="canvasWidth()"
+      [attr.height]="canvasHeight()"
+    >
+      @for (edge of edgePaths(); track edge.id) {
+        <path class="edge-path" [attr.d]="edge.path"></path>
+      }
+
+      @if (previewEdgePath(); as previewPath) {
+        <path
+          class="edge-path edge-preview"
+          data-testid="preview-edge"
+          [attr.d]="previewPath"
+        ></path>
+      }
+    </svg>
+
+    @if (!store.flow().nodes.length) {
+      <div class="empty-state" data-testid="empty-canvas">
+        <h3>Start with a node</h3>
+        <p>
+          Add a start node, guide the conversation with messages or questions, then branch into
+          a queue, human handoff, or clean ending.
+        </p>
+      </div>
+    }
+
+    @for (node of store.flow().nodes; track node.id) {
+      <article
+        class="node-card"
+        [attr.data-testid]="'node-' + node.id"
+        [class.node-selected]="store.selectedNodeId() === node.id"
+        [class.node-branch]="isMultiPortNode(node)"
+        [class.node-terminal]="!canStartConnection(node)"
+        [class.node-invalid]="hasIssuesForNode(node.id)"
+        [class.node-drop-target]="isConnectionDropTarget(node.id)"
+        [style.height.px]="getNodeHeight(node)"
+        [style.transform]="'translate(' + node.position.x + 'px, ' + node.position.y + 'px)'"
+        (pointerenter)="handleNodeConnectionPointerEnter(node.id)"
+        (pointerleave)="handleNodeConnectionPointerLeave(node.id)"
+        (pointerup)="handleNodeConnectionPointerUp(node.id, $event)"
+        (click)="store.selectNode(node.id); $event.stopPropagation()"
+      >
+        @if (canAcceptIncoming(node)) {
+          <button
+            type="button"
+            class="handle handle-input"
+            [class.handle-drop-target]="isConnectionDropTarget(node.id)"
+            [attr.aria-label]="'Connect into ' + getNodeTitle(node.type)"
+            [attr.data-testid]="'input-' + node.id"
+            (click)="handleInputHandleClick(node.id, $event)"
+          ></button>
+        }
+
+        <div class="node-body">
+          <div class="node-top">
+            <span class="node-kind">{{ getNodeTitle(node.type) }}</span>
+            <button
+              type="button"
+              class="drag-handle"
+              [attr.data-testid]="'drag-' + node.id"
+              aria-label="Drag node"
+              (pointerdown)="beginNodeDrag($event, node.id)"
+            >
+              Drag
+            </button>
+          </div>
+
+          <h3>{{ getNodeHeadline(node) }}</h3>
+          <p>{{ getNodeSummary(node) }}</p>
+
+          @if (isMultiPortNode(node)) {
+            <div class="port-list">
+              @for (port of getOutputPorts(node); track port.id) {
+                <div class="port-row">
+                  <div class="port-copy">
+                    <span class="port-label">{{ port.label }}</span>
+                    <span class="port-state">
+                      {{ isPortConnected(node.id, port.id) ? 'Connected' : 'Needs connection' }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          @if (getIssuesForNode(node.id).length) {
+            <p class="node-issue">{{ getIssuesForNode(node.id)[0].message }}</p>
+          }
+        </div>
+
+        @if (isMultiPortNode(node)) {
+          @for (port of getOutputPorts(node); track port.id) {
+            <button
+              type="button"
+              class="handle handle-output handle-output-branch"
+              [class.handle-pending]="isConnectionSourceActive(node.id, port.id)"
+              [style.top.px]="getOutputPortHandleTop(node, port.id)"
+              [attr.aria-label]="'Connect from ' + port.label"
+              [attr.data-testid]="getOutputHandleTestId(node.id, port.id)"
+              (pointerdown)="beginConnectionDrag($event, node.id, port.id)"
+              (click)="handleOutputHandleClick(node.id, $event, port.id)"
+            ></button>
+          }
+        } @else if (canStartConnection(node)) {
+          <button
+            type="button"
+            class="handle handle-output"
+            [class.handle-pending]="isConnectionSourceActive(node.id)"
+            [attr.aria-label]="'Connect from ' + getNodeTitle(node.type)"
+            [attr.data-testid]="'output-' + node.id"
+            (pointerdown)="beginConnectionDrag($event, node.id)"
+            (click)="handleOutputHandleClick(node.id, $event)"
+          ></button>
+        }
+      </article>
+    }
+  </div>
+</div>

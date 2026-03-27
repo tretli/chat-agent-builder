@@ -1,0 +1,31 @@
+<div class="field-group">
+  <label for="handoff-queue">Destination queue</label>
+  <select
+    id="handoff-queue"
+    data-testid="handoff-queue-select"
+    [ngModel]="node().config.queueId"
+    (ngModelChange)="store.updateSelectedHandoffQueue($event)"
+  >
+    <option value="">Select a queue</option>
+    @for (queue of store.queueOptions; track queue.id) {
+      <option [value]="queue.id">{{ queue.name }}</option>
+    }
+  </select>
+</div>
+
+<div class="field-group">
+  <label for="handoff-transfer-message">Transfer message</label>
+  <textarea
+    id="handoff-transfer-message"
+    rows="4"
+    data-testid="handoff-transfer-message-input"
+    [ngModel]="node().config.transferMessage"
+    (ngModelChange)="store.updateSelectedTransferMessage($event)"
+    placeholder="I'm connecting you with a specialist now."
+  ></textarea>
+</div>
+
+<div class="field-group">
+  <label>Queue detail</label>
+  <p class="field-copy">{{ getQueueDescription(node(), store.queueOptions) }}</p>
+</div>

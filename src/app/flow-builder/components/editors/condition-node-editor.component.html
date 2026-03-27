@@ -1,0 +1,88 @@
+<div class="field-group">
+  <label for="condition-default-label">No-match label</label>
+  <input
+    id="condition-default-label"
+    type="text"
+    data-testid="condition-default-label-input"
+    [ngModel]="node().config.defaultPortLabel"
+    (ngModelChange)="store.updateSelectedConditionDefaultPortLabel($event)"
+    placeholder="No match"
+  />
+</div>
+
+<div class="field-group">
+  <label>Rules</label>
+  <div class="editor-list">
+    @for (rule of node().config.rules; track rule.id) {
+      <div class="rule-card">
+        <div class="editor-field">
+          <span class="editor-label">Rule {{ $index + 1 }}</span>
+          <input
+            type="text"
+            [attr.data-testid]="'condition-rule-label-' + rule.id"
+            [ngModel]="rule.label"
+            (ngModelChange)="store.updateConditionRuleLabel(rule.id, $event)"
+            placeholder="Enterprise leads"
+          />
+        </div>
+
+        <div class="rule-grid">
+          <div class="editor-field">
+            <span class="editor-label">Variable key</span>
+            <input
+              type="text"
+              [attr.data-testid]="'condition-rule-variable-' + rule.id"
+              [ngModel]="rule.variableKey"
+              (ngModelChange)="store.updateConditionRuleVariableKey(rule.id, $event)"
+              placeholder="plan"
+            />
+          </div>
+
+          <div class="editor-field">
+            <span class="editor-label">Operator</span>
+            <select
+              [attr.data-testid]="'condition-rule-operator-' + rule.id"
+              [ngModel]="rule.operator"
+              (ngModelChange)="store.updateConditionRuleOperator(rule.id, $event)"
+            >
+              @for (option of store.conditionOperatorOptions; track option.id) {
+                <option [value]="option.id">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        @if (requiresConditionValue(rule.operator)) {
+          <div class="editor-field">
+            <span class="editor-label">Value</span>
+            <input
+              type="text"
+              [attr.data-testid]="'condition-rule-value-' + rule.id"
+              [ngModel]="rule.value"
+              (ngModelChange)="store.updateConditionRuleValue(rule.id, $event)"
+              placeholder="enterprise"
+            />
+          </div>
+        }
+
+        <button
+          type="button"
+          class="inline-action"
+          [attr.data-testid]="'remove-condition-rule-' + rule.id"
+          (click)="store.removeConditionRule(rule.id)"
+        >
+          Remove rule
+        </button>
+      </div>
+    }
+  </div>
+</div>
+
+<button
+  type="button"
+  class="secondary-action"
+  data-testid="add-condition-rule"
+  (click)="store.addConditionRule()"
+>
+  Add rule
+</button>

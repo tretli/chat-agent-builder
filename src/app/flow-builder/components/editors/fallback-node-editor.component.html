@@ -1,0 +1,11 @@
+<div class="field-group">
+  <label for="fallback-message">Fallback message</label>
+  <textarea
+    id="fallback-message"
+    rows="4"
+    data-testid="fallback-message-input"
+    [ngModel]="node().config.message"
+    (ngModelChange)="store.updateSelectedFallbackMessage($event)"
+    placeholder="I'm not fully sure which team fits yet, so I'll get you to the right place."
+  ></textarea>
+</div>

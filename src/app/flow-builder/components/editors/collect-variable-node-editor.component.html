@@ -1,0 +1,36 @@
+<div class="field-group">
+  <label for="variable-key">Variable key</label>
+  <input
+    id="variable-key"
+    name="variableKey"
+    type="text"
+    data-testid="variable-key-input"
+    [ngModel]="node().config.variableKey"
+    (ngModelChange)="store.updateSelectedVariableKey($event)"
+    placeholder="leadCompany"
+  />
+</div>
+
+<div class="field-group">
+  <label for="prompt">Prompt</label>
+  <textarea
+    id="prompt"
+    name="prompt"
+    rows="4"
+    data-testid="prompt-input"
+    [ngModel]="node().config.prompt"
+    (ngModelChange)="store.updateSelectedPrompt($event)"
+    placeholder="Ask the user which company they represent."
+  ></textarea>
+</div>
+
+<label class="checkbox-field">
+  <input
+    type="checkbox"
+    name="required"
+    data-testid="required-checkbox"
+    [ngModel]="node().config.required"
+    (ngModelChange)="store.updateSelectedRequired($event)"
+  />
+  <span>Required before the flow can continue</span>
+</label>
