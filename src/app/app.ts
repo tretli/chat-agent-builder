@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { MOCK_QUEUES } from './flow-builder.data';
 import {
   CollectVariableNode,
+  DecisionNode,
   FlowDefinition,
   FlowEdge,
   FlowNode,
@@ -25,6 +26,7 @@ import {
   findIncomingEdge,
   findNode,
   findOutgoingEdge,
+  findOutgoingEdgeForExit,
   getNodeTitle,
   groupIssuesByNode,
   validateFlow,
@@ -40,8 +42,12 @@ interface DragState {
   originY: number;
 }
 
-interface ConnectionDragState {
-  sourceNodeId: string;
+interface ConnectionSourceState {
+  nodeId: string;
+  exitId: string | null;
+}
+
+interface ConnectionDragState extends ConnectionSourceState {
   pointerId: number;
   startPosition: NodePosition;
   currentPosition: NodePosition;
@@ -77,14 +83,14 @@ export class App {
     edges: []
   });
   readonly selectedNodeId = signal<string | null>(null);
-  readonly pendingConnectionSourceId = signal<string | null>(null);
+  readonly pendingConnectionSource = signal<ConnectionSourceState | null>(null);
   readonly connectionDrag = signal<ConnectionDragState | null>(null);
   readonly notice = signal<{
     tone: NoticeTone;
     text: string;
   }>({
     tone: 'info',
-    text: 'Add a start node, collect the right variables, then end the chat in a queue route.'
+    text: 'Add a start node, collect the right variables, branch if needed, then end in a queue route.'
   });
 
   readonly selectedNode = computed(() => {
@@ -114,7 +120,7 @@ export class App {
         return [];
       }
 
-      const startPoint = this.getNodeOutputPoint(sourceNode);
+      const startPoint = this.getNodeOutputPoint(sourceNode, edge.sourceExitId ?? null);
       const endPoint = this.getNodeInputPoint(targetNode);
 
       return [
@@ -132,13 +138,13 @@ export class App {
       return null;
     }
 
-    const sourceNode = findNode(this.flow(), connectionDrag.sourceNodeId);
+    const sourceNode = findNode(this.flow(), connectionDrag.nodeId);
 
     if (!sourceNode) {
       return null;
     }
 
-    const startPoint = this.getNodeOutputPoint(sourceNode);
+    const startPoint = this.getNodeOutputPoint(sourceNode, connectionDrag.exitId);
     const targetNode =
       connectionDrag.hoveredTargetNodeId !== null
         ? findNode(this.flow(), connectionDrag.hoveredTargetNodeId)
@@ -152,6 +158,7 @@ export class App {
 
   private nextNodeId = 1;
   private nextEdgeId = 1;
+  private nextDecisionExitId = 1;
   private dragState: DragState | null = null;
 
   addNode(nodeType: FlowNodeType): void {
@@ -204,8 +211,8 @@ export class App {
     this.selectedNodeId.set(null);
 
     if (
-      this.pendingConnectionSourceId() === selectedNode.id ||
-      this.connectionDrag()?.sourceNodeId === selectedNode.id ||
+      this.pendingConnectionSource()?.nodeId === selectedNode.id ||
+      this.connectionDrag()?.nodeId === selectedNode.id ||
       this.connectionDrag()?.hoveredTargetNodeId === selectedNode.id
     ) {
       this.cancelConnectionSelection(false);
@@ -236,7 +243,11 @@ export class App {
     this.selectedNodeId.set(nodeId);
   }
 
-  beginConnectionDrag(event: PointerLikeEvent, nodeId: string): void {
+  beginConnectionDrag(
+    event: PointerLikeEvent,
+    nodeId: string,
+    exitId: string | null = null
+  ): void {
     const node = findNode(this.flow(), nodeId);
 
     if (!node || node.type === 'route-to-queue') {
@@ -249,20 +260,23 @@ export class App {
     const startPosition = this.getCanvasPointFromClient(event.clientX, event.clientY);
 
     this.connectionDrag.set({
-      sourceNodeId: nodeId,
+      nodeId,
+      exitId,
       pointerId: event.pointerId ?? 1,
       startPosition,
       currentPosition: startPosition,
       hoveredTargetNodeId: null,
       didMove: false
     });
-    this.pendingConnectionSourceId.set(null);
+    this.pendingConnectionSource.set(null);
     this.selectedNodeId.set(nodeId);
   }
 
   @HostListener('window:pointermove', ['$event'])
   onWindowPointerMove(event: PointerLikeEvent): void {
     if (this.dragState && (event.pointerId ?? this.dragState.pointerId) === this.dragState.pointerId) {
+      const node = findNode(this.flow(), this.dragState.nodeId);
+      const nodeHeight = node ? this.getNodeHeight(node) : NODE_HEIGHT;
       const nextX = this.clamp(
         this.dragState.originX + (event.clientX - this.dragState.startX),
         24,
@@ -271,11 +285,11 @@ export class App {
       const nextY = this.clamp(
         this.dragState.originY + (event.clientY - this.dragState.startY),
         24,
-        this.canvasHeight - NODE_HEIGHT - 24
+        this.canvasHeight - nodeHeight - 24
       );
 
-      this.updateNode(this.dragState.nodeId, (node) => ({
-        ...node,
+      this.updateNode(this.dragState.nodeId, (currentNode) => ({
+        ...currentNode,
         position: {
           x: nextX,
           y: nextY
@@ -332,7 +346,11 @@ export class App {
     }
 
     if (connectionDrag.hoveredTargetNodeId) {
-      this.completeConnection(connectionDrag.sourceNodeId, connectionDrag.hoveredTargetNodeId);
+      this.completeConnection(
+        connectionDrag.nodeId,
+        connectionDrag.hoveredTargetNodeId,
+        connectionDrag.exitId
+      );
       return;
     }
 
@@ -340,11 +358,21 @@ export class App {
     this.setNotice('Connection drag cancelled.', 'info');
   }
 
-  handleOutputHandleClick(nodeId: string, event: Event): void {
+  handleOutputHandleClick(
+    nodeId: string,
+    event: Event,
+    exitId: string | null = null
+  ): void {
     event.stopPropagation();
 
-    if (this.pendingConnectionSourceId() === nodeId) {
-      this.pendingConnectionSourceId.set(null);
+    const pendingConnectionSource = this.pendingConnectionSource();
+
+    if (
+      pendingConnectionSource &&
+      pendingConnectionSource.nodeId === nodeId &&
+      pendingConnectionSource.exitId === exitId
+    ) {
+      this.pendingConnectionSource.set(null);
       this.setNotice('Connection source cleared.', 'info');
       return;
     }
@@ -356,7 +384,10 @@ export class App {
       return;
     }
 
-    this.pendingConnectionSourceId.set(nodeId);
+    this.pendingConnectionSource.set({
+      nodeId,
+      exitId
+    });
     this.selectedNodeId.set(nodeId);
     this.setNotice(
       'Connection started. Drag onto a node or click an input handle to link the flow.',
@@ -404,7 +435,7 @@ export class App {
 
     event.preventDefault?.();
     event.stopPropagation?.();
-    this.completeConnection(connectionDrag.sourceNodeId, nodeId);
+    this.completeConnection(connectionDrag.nodeId, nodeId, connectionDrag.exitId);
   }
 
   handleInputHandleClick(nodeId: string, event: Event): void {
@@ -414,15 +445,19 @@ export class App {
       return;
     }
 
-    const sourceNodeId = this.pendingConnectionSourceId();
+    const pendingConnectionSource = this.pendingConnectionSource();
 
-    if (!sourceNodeId) {
+    if (!pendingConnectionSource) {
       this.selectedNodeId.set(nodeId);
-      this.setNotice('Select an output handle first, then click a node input to connect.', 'info');
+      this.setNotice('Select an output handle first, then click an input handle to connect.', 'info');
       return;
     }
 
-    this.completeConnection(sourceNodeId, nodeId);
+    this.completeConnection(
+      pendingConnectionSource.nodeId,
+      nodeId,
+      pendingConnectionSource.exitId
+    );
   }
 
   updateSelectedVariableKey(variableKey: string): void {
@@ -473,6 +508,105 @@ export class App {
     }));
   }
 
+  updateSelectedDecisionPrompt(intentPrompt: string): void {
+    const node = this.selectedNode();
+
+    if (!node || node.type !== 'decision') {
+      return;
+    }
+
+    this.updateDecisionNode(node.id, (currentNode) => ({
+      ...currentNode,
+      config: {
+        ...currentNode.config,
+        intentPrompt
+      }
+    }));
+  }
+
+  updateDecisionExitLabel(exitId: string, label: string): void {
+    const node = this.selectedNode();
+
+    if (!node || node.type !== 'decision') {
+      return;
+    }
+
+    this.updateDecisionNode(node.id, (currentNode) => ({
+      ...currentNode,
+      config: {
+        ...currentNode.config,
+        exits: currentNode.config.exits.map((exit) =>
+          exit.id === exitId
+            ? {
+                ...exit,
+                label
+              }
+            : exit
+        )
+      }
+    }));
+  }
+
+  addDecisionExit(): void {
+    const node = this.selectedNode();
+
+    if (!node || node.type !== 'decision') {
+      return;
+    }
+
+    const nextExitNumber = node.config.exits.length + 1;
+
+    this.updateDecisionNode(node.id, (currentNode) => ({
+      ...currentNode,
+      config: {
+        ...currentNode.config,
+        exits: [
+          ...currentNode.config.exits,
+          this.createDecisionExit(`Option ${nextExitNumber}`)
+        ]
+      }
+    }));
+  }
+
+  removeDecisionExit(exitId: string): void {
+    const node = this.selectedNode();
+
+    if (!node || node.type !== 'decision' || node.config.exits.length <= 2) {
+      return;
+    }
+
+    const flow = this.flow();
+
+    this.flow.set({
+      nodes: flow.nodes.map((currentNode) => {
+        if (currentNode.id !== node.id || currentNode.type !== 'decision') {
+          return currentNode;
+        }
+
+        return {
+          ...currentNode,
+          config: {
+            ...currentNode.config,
+            exits: currentNode.config.exits.filter((exit) => exit.id !== exitId)
+          }
+        };
+      }),
+      edges: flow.edges.filter(
+        (edge) => !(edge.sourceNodeId === node.id && edge.sourceExitId === exitId)
+      )
+    });
+
+    const pendingConnectionSource = this.pendingConnectionSource();
+
+    if (
+      (pendingConnectionSource?.nodeId === node.id &&
+        pendingConnectionSource.exitId === exitId) ||
+      (this.connectionDrag()?.nodeId === node.id && this.connectionDrag()?.exitId === exitId)
+    ) {
+      this.cancelConnectionSelection(false);
+    }
+  }
+
   updateSelectedQueue(queueId: string): void {
     const node = this.selectedNode();
 
@@ -503,6 +637,10 @@ export class App {
         return node.config.variableKey.trim()
           ? `Capture "${node.config.variableKey.trim()}"`
           : 'Capture a customer detail';
+      case 'decision':
+        return node.config.intentPrompt.trim()
+          ? node.config.intentPrompt.trim()
+          : 'Branch based on what the user wants';
       case 'route-to-queue':
         return node.config.queueName
           ? `Send to ${node.config.queueName}`
@@ -518,6 +656,8 @@ export class App {
         return node.config.prompt.trim()
           ? node.config.prompt.trim()
           : 'Ask the user for a value and store it as a reusable variable.';
+      case 'decision':
+        return `${node.config.exits.length} exits let you route to different next steps based on intent.`;
       case 'route-to-queue':
         return node.config.queueName
           ? 'Conversation ends here and routes to the selected team queue.'
@@ -541,10 +681,11 @@ export class App {
     return this.getIssuesForNode(nodeId).length > 0;
   }
 
-  isConnectionSourceActive(nodeId: string): boolean {
+  isConnectionSourceActive(nodeId: string, exitId: string | null = null): boolean {
     return (
-      this.pendingConnectionSourceId() === nodeId ||
-      this.connectionDrag()?.sourceNodeId === nodeId
+      (this.pendingConnectionSource()?.nodeId === nodeId &&
+        this.pendingConnectionSource()?.exitId === exitId) ||
+      (this.connectionDrag()?.nodeId === nodeId && this.connectionDrag()?.exitId === exitId)
     );
   }
 
@@ -558,6 +699,42 @@ export class App {
 
   canStartConnection(node: FlowNode): boolean {
     return node.type !== 'route-to-queue';
+  }
+
+  isDecisionNode(node: FlowNode): node is DecisionNode {
+    return node.type === 'decision';
+  }
+
+  getDecisionNodeHeight(node: DecisionNode): number {
+    return Math.max(224, 152 + node.config.exits.length * 38);
+  }
+
+  getNodeHeight(node: FlowNode): number {
+    return this.isDecisionNode(node) ? this.getDecisionNodeHeight(node) : NODE_HEIGHT;
+  }
+
+  getDecisionExitHandleTop(node: DecisionNode, exitId: string): number {
+    return this.getDecisionExitCenterOffset(node, exitId) - 12;
+  }
+
+  getDecisionExitDisplayLabel(label: string, index: number): string {
+    return label.trim() || `Option ${index + 1}`;
+  }
+
+  canRemoveDecisionExit(node: DecisionNode): boolean {
+    return node.config.exits.length > 2;
+  }
+
+  isDecisionExitConnected(nodeId: string, exitId: string): boolean {
+    return !!findOutgoingEdgeForExit(this.flow(), nodeId, exitId);
+  }
+
+  getDecisionExitStatus(nodeId: string, exitId: string): string {
+    return this.isDecisionExitConnected(nodeId, exitId) ? 'Connected' : 'Needs connection';
+  }
+
+  getOutputHandleTestId(nodeId: string, exitId: string | null = null): string {
+    return exitId ? `output-${nodeId}-${exitId}` : `output-${nodeId}`;
   }
 
   trackByIssue(index: number, issue: ValidationIssue): string {
@@ -587,6 +764,19 @@ export class App {
             required: true
           }
         };
+      case 'decision':
+        return {
+          id,
+          type: 'decision',
+          position,
+          config: {
+            intentPrompt: '',
+            exits: [
+              this.createDecisionExit('Option 1'),
+              this.createDecisionExit('Option 2')
+            ]
+          }
+        };
       case 'route-to-queue':
         return {
           id,
@@ -598,6 +788,13 @@ export class App {
           }
         };
     }
+  }
+
+  private createDecisionExit(label: string): DecisionNode['config']['exits'][number] {
+    return {
+      id: `decision-exit-${this.nextDecisionExitId++}`,
+      label
+    };
   }
 
   private getSuggestedPosition(index: number): { x: number; y: number } {
@@ -626,6 +823,13 @@ export class App {
     this.updateNode(nodeId, (node) => (node.type === 'collect-variable' ? updater(node) : node));
   }
 
+  private updateDecisionNode(
+    nodeId: string,
+    updater: (node: DecisionNode) => DecisionNode
+  ): void {
+    this.updateNode(nodeId, (node) => (node.type === 'decision' ? updater(node) : node));
+  }
+
   private updateRouteNode(
     nodeId: string,
     updater: (node: RouteToQueueNode) => RouteToQueueNode
@@ -635,7 +839,8 @@ export class App {
 
   private validateConnection(
     sourceNodeId: string,
-    targetNodeId: string
+    targetNodeId: string,
+    sourceExitId: string | null
   ): { ok: true; message: string } | { ok: false; message: string } {
     const flow = this.flow();
     const sourceNode = findNode(flow, sourceNodeId);
@@ -669,7 +874,21 @@ export class App {
       };
     }
 
-    if (findOutgoingEdge(flow, sourceNodeId)) {
+    if (sourceNode.type === 'decision') {
+      if (!sourceExitId) {
+        return {
+          ok: false,
+          message: 'Choose a decision exit before connecting this branch.'
+        };
+      }
+
+      if (findOutgoingEdgeForExit(flow, sourceNodeId, sourceExitId)) {
+        return {
+          ok: false,
+          message: 'That exit is already connected to another node.'
+        };
+      }
+    } else if (findOutgoingEdge(flow, sourceNodeId)) {
       return {
         ok: false,
         message: 'This node already has an outgoing connection.'
@@ -686,7 +905,7 @@ export class App {
     if (wouldCreateCycle(flow, sourceNodeId, targetNodeId)) {
       return {
         ok: false,
-        message: 'That connection would create a loop in a linear flow.'
+        message: 'That connection would create a loop in the flow.'
       };
     }
 
@@ -696,12 +915,16 @@ export class App {
     };
   }
 
-  private completeConnection(sourceNodeId: string, targetNodeId: string): void {
-    const validation = this.validateConnection(sourceNodeId, targetNodeId);
+  private completeConnection(
+    sourceNodeId: string,
+    targetNodeId: string,
+    sourceExitId: string | null
+  ): void {
+    const validation = this.validateConnection(sourceNodeId, targetNodeId, sourceExitId);
 
     if (!validation.ok) {
       this.connectionDrag.set(null);
-      this.pendingConnectionSourceId.set(null);
+      this.pendingConnectionSource.set(null);
       this.setNotice(validation.message, 'error');
       return;
     }
@@ -710,7 +933,8 @@ export class App {
     const nextEdge: FlowEdge = {
       id: `edge-${this.nextEdgeId++}`,
       sourceNodeId,
-      targetNodeId
+      targetNodeId,
+      ...(sourceExitId ? { sourceExitId } : {})
     };
 
     this.flow.set({
@@ -718,14 +942,14 @@ export class App {
       edges: [...flow.edges, nextEdge]
     });
     this.connectionDrag.set(null);
-    this.pendingConnectionSourceId.set(null);
+    this.pendingConnectionSource.set(null);
     this.selectedNodeId.set(targetNodeId);
     this.setNotice('Nodes connected.', 'success');
   }
 
   private cancelConnectionSelection(showNotice: boolean): void {
-    const hadSelection = !!this.pendingConnectionSourceId() || !!this.connectionDrag();
-    this.pendingConnectionSourceId.set(null);
+    const hadSelection = !!this.pendingConnectionSource() || !!this.connectionDrag();
+    this.pendingConnectionSource.set(null);
     this.connectionDrag.set(null);
 
     if (showNotice && hadSelection) {
@@ -751,25 +975,41 @@ export class App {
     };
   }
 
-  private getNodeOutputPoint(node: FlowNode): NodePosition {
+  private getNodeOutputPoint(node: FlowNode, sourceExitId: string | null): NodePosition {
+    if (this.isDecisionNode(node) && sourceExitId) {
+      return {
+        x: node.position.x + NODE_WIDTH,
+        y: node.position.y + this.getDecisionExitCenterOffset(node, sourceExitId)
+      };
+    }
+
     return {
       x: node.position.x + NODE_WIDTH,
-      y: node.position.y + NODE_HEIGHT / 2
+      y: node.position.y + this.getNodeHeight(node) / 2
     };
   }
 
   private getNodeInputPoint(node: FlowNode): NodePosition {
     return {
       x: node.position.x,
-      y: node.position.y + NODE_HEIGHT / 2
+      y: node.position.y + this.getNodeHeight(node) / 2
     };
+  }
+
+  private getDecisionExitCenterOffset(node: DecisionNode, exitId: string): number {
+    const exitIndex = Math.max(
+      0,
+      node.config.exits.findIndex((exit) => exit.id === exitId)
+    );
+
+    return 136 + exitIndex * 38;
   }
 
   private isNodeConnectionTarget(nodeId: string): boolean {
     const connectionDrag = this.connectionDrag();
     const node = findNode(this.flow(), nodeId);
 
-    return !!connectionDrag && !!node && node.type !== 'start' && node.id !== connectionDrag.sourceNodeId;
+    return !!connectionDrag && !!node && node.type !== 'start' && node.id !== connectionDrag.nodeId;
   }
 
   private setNotice(text: string, tone: NoticeTone): void {

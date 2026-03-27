@@ -1,4 +1,5 @@
 import {
+  DecisionNode,
   FlowDefinition,
   FlowEdge,
   FlowNode,
@@ -29,6 +30,8 @@ export function getNodeTitle(nodeType: FlowNodeType): string {
       return 'Start';
     case 'collect-variable':
       return 'Collect Variable';
+    case 'decision':
+      return 'Decision';
     case 'route-to-queue':
       return 'Route to Queue';
   }
@@ -40,6 +43,20 @@ export function findNode(flow: FlowDefinition, nodeId: string): FlowNode | undef
 
 export function findOutgoingEdge(flow: FlowDefinition, nodeId: string): FlowEdge | undefined {
   return flow.edges.find((edge) => edge.sourceNodeId === nodeId);
+}
+
+export function findOutgoingEdges(flow: FlowDefinition, nodeId: string): FlowEdge[] {
+  return flow.edges.filter((edge) => edge.sourceNodeId === nodeId);
+}
+
+export function findOutgoingEdgeForExit(
+  flow: FlowDefinition,
+  nodeId: string,
+  exitId: string
+): FlowEdge | undefined {
+  return flow.edges.find(
+    (edge) => edge.sourceNodeId === nodeId && edge.sourceExitId === exitId
+  );
 }
 
 export function findIncomingEdge(flow: FlowDefinition, nodeId: string): FlowEdge | undefined {
@@ -160,6 +177,10 @@ export function validateFlow(flow: FlowDefinition): ValidationIssue[] {
       }
     }
 
+    if (node.type === 'decision') {
+      validateDecisionNode(flow, node, issues);
+    }
+
     if (node.type === 'route-to-queue' && (!node.config.queueId || !node.config.queueName)) {
       issues.push({
         code: 'missing-queue',
@@ -198,6 +219,68 @@ export function validateFlow(flow: FlowDefinition): ValidationIssue[] {
   }
 
   return issues;
+}
+
+function validateDecisionNode(
+  flow: FlowDefinition,
+  node: DecisionNode,
+  issues: ValidationIssue[]
+): void {
+  const prompt = node.config.intentPrompt.trim();
+
+  if (!prompt) {
+    issues.push({
+      code: 'missing-decision-prompt',
+      message: 'Decision nodes need a prompt describing what the user wants.',
+      nodeId: node.id
+    });
+  }
+
+  if (node.config.exits.length < 2) {
+    issues.push({
+      code: 'too-few-decision-exits',
+      message: 'Decision nodes need at least two exits.',
+      nodeId: node.id
+    });
+  }
+
+  const exitLabelOwners = new Map<string, string[]>();
+
+  for (const exit of node.config.exits) {
+    const label = exit.label.trim();
+
+    if (!label) {
+      issues.push({
+        code: 'missing-decision-exit-label',
+        message: 'Every decision exit needs a label.',
+        nodeId: node.id
+      });
+    } else {
+      const owners = exitLabelOwners.get(label) ?? [];
+      owners.push(exit.id);
+      exitLabelOwners.set(label, owners);
+    }
+
+    if (!findOutgoingEdgeForExit(flow, node.id, exit.id)) {
+      issues.push({
+        code: 'unconnected-decision-exit',
+        message: `Connect the "${label || 'unnamed'}" exit to a next step.`,
+        nodeId: node.id
+      });
+    }
+  }
+
+  for (const owners of exitLabelOwners.values()) {
+    if (owners.length < 2) {
+      continue;
+    }
+
+    issues.push({
+      code: 'duplicate-decision-exit-label',
+      message: 'Decision exit labels must be unique within the node.',
+      nodeId: node.id
+    });
+  }
 }
 
 function getReachableNodeIds(flow: FlowDefinition, startNodeId: string): Set<string> {

@@ -264,6 +264,7 @@ select {
 
 .node-card {
   position: absolute;
+  box-sizing: border-box;
   width: 248px;
   min-height: 156px;
   padding: 16px;
@@ -274,6 +275,10 @@ select {
   transition:
     box-shadow 140ms ease,
     border-color 140ms ease;
+}
+
+.node-decision {
+  background: linear-gradient(180deg, #fffefa 0%, #f1f6ee 100%);
 }
 
 .node-card:hover {
@@ -373,6 +378,44 @@ select {
   color: #a03d31;
 }
 
+.decision-exit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.decision-exit-row {
+  padding: 10px 38px 10px 12px;
+  border: 1px solid rgba(16, 36, 55, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.decision-exit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.decision-exit-label,
+.decision-editor-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #102437;
+}
+
+.decision-exit-state {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6e7f8f;
+}
+
+.handle-output-branch {
+  right: -12px;
+}
+
 .inspector-panel {
   overflow: auto;
 }
@@ -415,6 +458,47 @@ select {
 .field-group textarea {
   resize: vertical;
   min-height: 112px;
+}
+
+.decision-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.decision-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.decision-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline-action,
+.secondary-action {
+  padding: 10px 14px;
+  border: 1px solid rgba(16, 36, 55, 0.12);
+  border-radius: 999px;
+  background: #fffdfa;
+  color: inherit;
+  cursor: pointer;
+}
+
+.inline-action:disabled,
+.secondary-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secondary-action {
+  align-self: start;
+  background: #102437;
+  color: #f8f3e7;
 }
 
 .checkbox-field {

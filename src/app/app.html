@@ -41,6 +41,18 @@
       <button
         type="button"
         class="palette-card"
+        data-testid="add-decision-node"
+        (click)="addNode('decision')"
+      >
+        <span class="palette-title">Decision</span>
+        <span class="palette-copy">
+          Define multiple exits and branch the flow based on what the user wants.
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="palette-card"
         data-testid="add-route-node"
         (click)="addNode('route-to-queue')"
       >
@@ -50,7 +62,10 @@
 
       <div class="palette-note">
         <h3>Flow rules</h3>
-        <p>Keep one start node, one incoming edge per node, and finish on a queue route.</p>
+        <p>
+          Keep one start node, one incoming edge per node, and use decision exits to
+          branch into the right queue routes.
+        </p>
       </div>
     </aside>
 
@@ -119,8 +134,10 @@
               class="node-card"
               [attr.data-testid]="'node-' + node.id"
               [class.node-selected]="selectedNodeId() === node.id"
+              [class.node-decision]="node.type === 'decision'"
               [class.node-invalid]="hasIssuesForNode(node.id)"
               [class.node-drop-target]="isConnectionDropTarget(node.id)"
+              [style.height.px]="getNodeHeight(node)"
               [style.transform]="'translate(' + node.position.x + 'px, ' + node.position.y + 'px)'"
               (pointerenter)="handleNodeConnectionPointerEnter(node.id)"
               (pointerleave)="handleNodeConnectionPointerLeave(node.id)"
@@ -155,12 +172,42 @@
                 <h3>{{ getNodeHeadline(node) }}</h3>
                 <p>{{ getNodeSummary(node) }}</p>
 
+                @if (node.type === 'decision') {
+                  <div class="decision-exit-list">
+                    @for (exit of node.config.exits; track exit.id) {
+                      <div class="decision-exit-row">
+                        <div class="decision-exit-copy">
+                          <span class="decision-exit-label">
+                            {{ getDecisionExitDisplayLabel(exit.label, $index) }}
+                          </span>
+                          <span class="decision-exit-state">
+                            {{ getDecisionExitStatus(node.id, exit.id) }}
+                          </span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+
                 @if (getIssuesForNode(node.id).length) {
                   <p class="node-issue">{{ getIssuesForNode(node.id)[0].message }}</p>
                 }
               </div>
 
-              @if (canStartConnection(node)) {
+              @if (node.type === 'decision') {
+                @for (exit of node.config.exits; track exit.id) {
+                  <button
+                    type="button"
+                    class="handle handle-output handle-output-branch"
+                    [class.handle-pending]="isConnectionSourceActive(node.id, exit.id)"
+                    [style.top.px]="getDecisionExitHandleTop(node, exit.id)"
+                    [attr.aria-label]="'Connect from ' + getDecisionExitDisplayLabel(exit.label, $index)"
+                    [attr.data-testid]="getOutputHandleTestId(node.id, exit.id)"
+                    (pointerdown)="beginConnectionDrag($event, node.id, exit.id)"
+                    (click)="handleOutputHandleClick(node.id, $event, exit.id)"
+                  ></button>
+                }
+              } @else if (canStartConnection(node)) {
                 <button
                   type="button"
                   class="handle handle-output"
@@ -238,6 +285,66 @@
               />
               <span>Required before the flow can continue</span>
             </label>
+          }
+
+          @if (node.type === 'decision') {
+            <div class="field-group">
+              <label for="decision-prompt">Intent prompt</label>
+              <textarea
+                id="decision-prompt"
+                name="decisionPrompt"
+                rows="4"
+                data-testid="decision-prompt-input"
+                [ngModel]="node.config.intentPrompt"
+                (ngModelChange)="updateSelectedDecisionPrompt($event)"
+                placeholder="Describe how the AI should decide which exit matches the user's goal."
+              ></textarea>
+              <p class="field-copy">
+                Tell the AI how to interpret the user's request before choosing an exit.
+              </p>
+            </div>
+
+            <div class="field-group">
+              <label>Defined exits</label>
+              <div class="decision-editor-list">
+                @for (exit of node.config.exits; track exit.id) {
+                  <div class="decision-editor-row">
+                    <div class="decision-editor-field">
+                      <span class="decision-editor-label">Exit {{ $index + 1 }}</span>
+                      <input
+                        type="text"
+                        [attr.data-testid]="'decision-exit-input-' + exit.id"
+                        [ngModel]="exit.label"
+                        (ngModelChange)="updateDecisionExitLabel(exit.id, $event)"
+                        [placeholder]="'Option ' + ($index + 1)"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      class="inline-action"
+                      [disabled]="!canRemoveDecisionExit(node)"
+                      [attr.data-testid]="'remove-decision-exit-' + exit.id"
+                      (click)="removeDecisionExit(exit.id)"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                }
+              </div>
+              <p class="field-copy">
+                Each exit can connect to one next node, so the intent routing stays explicit.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="secondary-action"
+              data-testid="add-decision-exit"
+              (click)="addDecisionExit()"
+            >
+              Add exit
+            </button>
           }
 
           @if (node.type === 'route-to-queue') {

@@ -1,4 +1,8 @@
-export type FlowNodeType = 'start' | 'collect-variable' | 'route-to-queue';
+export type FlowNodeType =
+  | 'start'
+  | 'collect-variable'
+  | 'decision'
+  | 'route-to-queue';
 
 export interface NodePosition {
   x: number;
@@ -14,6 +18,7 @@ export interface FlowEdge {
   id: string;
   sourceNodeId: string;
   targetNodeId: string;
+  sourceExitId?: string;
 }
 
 interface BaseFlowNode<TType extends FlowNodeType, TConfig> {
@@ -35,6 +40,20 @@ export interface CollectVariableNode
     }
   > {}
 
+export interface DecisionExit {
+  id: string;
+  label: string;
+}
+
+export interface DecisionNode
+  extends BaseFlowNode<
+    'decision',
+    {
+      intentPrompt: string;
+      exits: DecisionExit[];
+    }
+  > {}
+
 export interface RouteToQueueNode
   extends BaseFlowNode<
     'route-to-queue',
@@ -44,7 +63,7 @@ export interface RouteToQueueNode
     }
   > {}
 
-export type FlowNode = StartNode | CollectVariableNode | RouteToQueueNode;
+export type FlowNode = StartNode | CollectVariableNode | DecisionNode | RouteToQueueNode;
 
 export interface QueueOption {
   id: string;

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
-import { FlowDefinition } from './flow-builder.models';
+import { DecisionNode, FlowDefinition, FlowNode } from './flow-builder.models';
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
@@ -23,21 +23,26 @@ describe('App', () => {
       'Design how a conversation qualifies'
     );
     expect(getByTestId('add-start-node')).not.toBeNull();
+    expect(getByTestId('add-collect-node')).not.toBeNull();
+    expect(getByTestId('add-decision-node')).not.toBeNull();
+    expect(getByTestId('add-route-node')).not.toBeNull();
     expect(getByTestId('empty-canvas')?.textContent).toContain('Start with a node');
   });
 
   it('adds each node type and keeps the last node selected', () => {
     clickByTestId('add-start-node');
     clickByTestId('add-collect-node');
+    clickByTestId('add-decision-node');
     clickByTestId('add-route-node');
 
     expect(app.flow().nodes.map((node) => node.type)).toEqual([
       'start',
       'collect-variable',
+      'decision',
       'route-to-queue'
     ]);
     expect(app.selectedNode()?.type).toBe('route-to-queue');
-    expect(host.querySelectorAll('.node-card').length).toBe(3);
+    expect(host.querySelectorAll('.node-card').length).toBe(4);
   });
 
   it('updates collect-variable settings from the inspector', async () => {
@@ -68,6 +73,56 @@ describe('App', () => {
     expect(selectedNode.config.variableKey).toBe('leadCompany');
     expect(selectedNode.config.prompt).toBe('Which company are you contacting us from?');
     expect(selectedNode.config.required).toBe(false);
+  });
+
+  it('updates decision settings and can add more exits from the inspector', async () => {
+    clickByTestId('add-decision-node');
+
+    const decisionNode = getSelectedDecisionNode();
+
+    const promptInput = getByTestId('decision-prompt-input') as HTMLTextAreaElement;
+    promptInput.value = 'Identify whether the user needs sales, onboarding, or billing help.';
+    promptInput.dispatchEvent(new Event('input'));
+
+    const [firstExit, secondExit] = decisionNode.config.exits;
+    const firstExitInput = getByTestId(
+      `decision-exit-input-${firstExit.id}`
+    ) as HTMLInputElement;
+    firstExitInput.value = 'Sales';
+    firstExitInput.dispatchEvent(new Event('input'));
+
+    const secondExitInput = getByTestId(
+      `decision-exit-input-${secondExit.id}`
+    ) as HTMLInputElement;
+    secondExitInput.value = 'Onboarding';
+    secondExitInput.dispatchEvent(new Event('input'));
+
+    clickByTestId('add-decision-exit');
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const updatedNode = getSelectedDecisionNode();
+    const thirdExit = updatedNode.config.exits[2];
+    const thirdExitInput = getByTestId(
+      `decision-exit-input-${thirdExit.id}`
+    ) as HTMLInputElement;
+    thirdExitInput.value = 'Billing';
+    thirdExitInput.dispatchEvent(new Event('input'));
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const finalNode = getSelectedDecisionNode();
+
+    expect(finalNode.config.intentPrompt).toBe(
+      'Identify whether the user needs sales, onboarding, or billing help.'
+    );
+    expect(finalNode.config.exits.map((exit) => exit.label)).toEqual([
+      'Sales',
+      'Onboarding',
+      'Billing'
+    ]);
   });
 
   it('updates the selected route queue from the inspector', async () => {
@@ -136,6 +191,68 @@ describe('App', () => {
     expect(app.notice().text).toContain('already has an outgoing connection');
   });
 
+  it('creates connections from different decision exits', () => {
+    clickByTestId('add-start-node');
+    clickByTestId('add-decision-node');
+    clickByTestId('add-route-node');
+    clickByTestId('add-route-node');
+
+    const [startNode, decisionNode, routeNodeA, routeNodeB] = app.flow().nodes;
+    const branchNode = asDecisionNode(decisionNode);
+
+    clickByTestId(`output-${startNode.id}`);
+    clickByTestId(`input-${branchNode.id}`);
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
+    clickByTestId(`input-${routeNodeA.id}`);
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
+    clickByTestId(`input-${routeNodeB.id}`);
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: startNode.id,
+        targetNodeId: branchNode.id
+      },
+      {
+        id: 'edge-2',
+        sourceNodeId: branchNode.id,
+        targetNodeId: routeNodeA.id,
+        sourceExitId: branchNode.config.exits[0].id
+      },
+      {
+        id: 'edge-3',
+        sourceNodeId: branchNode.id,
+        targetNodeId: routeNodeB.id,
+        sourceExitId: branchNode.config.exits[1].id
+      }
+    ]);
+  });
+
+  it('rejects connecting the same decision exit twice', () => {
+    clickByTestId('add-decision-node');
+    clickByTestId('add-route-node');
+    clickByTestId('add-route-node');
+
+    const [decisionNode, routeNodeA, routeNodeB] = app.flow().nodes;
+    const branchNode = asDecisionNode(decisionNode);
+    const exitId = branchNode.config.exits[0].id;
+
+    clickByTestId(`output-${branchNode.id}-${exitId}`);
+    clickByTestId(`input-${routeNodeA.id}`);
+    clickByTestId(`output-${branchNode.id}-${exitId}`);
+    clickByTestId(`input-${routeNodeB.id}`);
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: branchNode.id,
+        targetNodeId: routeNodeA.id,
+        sourceExitId: exitId
+      }
+    ]);
+    expect(app.notice().text).toContain('already connected');
+  });
+
   it('creates a connection by dragging from the output handle to the target node card', () => {
     clickByTestId('add-start-node');
     clickByTestId('add-collect-node');
@@ -163,6 +280,30 @@ describe('App', () => {
     expect(app.edgePaths()[0]?.path).toBe('M 344 166 C 380 166, 380 166, 416 166');
     expect(app.connectionDrag()).toBeNull();
     expect(app.notice().text).toContain('Nodes connected');
+  });
+
+  it('creates a branched connection by dragging from a decision exit', () => {
+    clickByTestId('add-decision-node');
+    clickByTestId('add-route-node');
+
+    const [decisionNode, routeNode] = app.flow().nodes;
+    const branchNode = asDecisionNode(decisionNode);
+    const exitId = branchNode.config.exits[0].id;
+
+    app.beginConnectionDrag(createPointerEvent(110, 110, 11), branchNode.id, exitId);
+    app.onWindowPointerMove(createPointerEvent(220, 240, 11));
+    app.handleNodeConnectionPointerEnter(routeNode.id);
+    app.handleNodeConnectionPointerUp(routeNode.id, createPointerEvent(220, 240, 11));
+    fixture.detectChanges();
+
+    expect(app.flow().edges).toEqual([
+      {
+        id: 'edge-1',
+        sourceNodeId: branchNode.id,
+        targetNodeId: routeNode.id,
+        sourceExitId: exitId
+      }
+    ]);
   });
 
   it('cancels a dragged connection when released away from a valid target', () => {
@@ -205,12 +346,15 @@ describe('App', () => {
 
   it('does not render a start input handle or a route output handle', () => {
     clickByTestId('add-start-node');
+    clickByTestId('add-decision-node');
     clickByTestId('add-route-node');
 
-    const [startNode, routeNode] = app.flow().nodes;
+    const [startNode, decisionNode, routeNode] = app.flow().nodes;
+    const branchNode = asDecisionNode(decisionNode);
 
     expect(getByTestId(`input-${startNode.id}`)).toBeNull();
     expect(getByTestId(`output-${routeNode.id}`)).toBeNull();
+    expect(getByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`)).not.toBeNull();
   });
 
   it('surfaces a missing route validation issue when no route node exists', () => {
@@ -246,22 +390,61 @@ describe('App', () => {
     );
   });
 
+  it('surfaces validation issues for incomplete decision nodes', () => {
+    app.flow.set(createFlowWithDecisionValidationProblems());
+    app.selectNode('decision-1');
+    fixture.detectChanges();
+
+    const issueCodes = app.validationIssues().map((issue) => issue.code);
+
+    expect(issueCodes).toContain('missing-decision-prompt');
+    expect(issueCodes).toContain('missing-decision-exit-label');
+    expect(issueCodes).toContain('duplicate-decision-exit-label');
+    expect(issueCodes).toContain('unconnected-decision-exit');
+    expect(getByTestId('validation-list')?.textContent).toContain(
+      'Decision nodes need a prompt'
+    );
+  });
+
   it('renders the live JSON preview from the current flow state', async () => {
     clickByTestId('add-start-node');
+    clickByTestId('add-decision-node');
+    clickByTestId('add-route-node');
     clickByTestId('add-route-node');
 
-    const queueSelect = getByTestId('queue-select') as HTMLSelectElement;
-    queueSelect.value = 'support-general';
-    queueSelect.dispatchEvent(new Event('change'));
+    const [, decisionNode] = app.flow().nodes;
+    const branchNode = asDecisionNode(decisionNode);
+    clickByTestId(`output-node-1`);
+    clickByTestId(`input-${branchNode.id}`);
+
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[0].id}`);
+    clickByTestId('input-node-3');
+
+    clickByTestId(`output-${branchNode.id}-${branchNode.config.exits[1].id}`);
+    clickByTestId('input-node-4');
+
+    const routeNodeA = app.flow().nodes[2];
+    app.selectNode(routeNodeA.id);
+    fixture.detectChanges();
+    const firstQueueSelect = getByTestId('queue-select') as HTMLSelectElement;
+    firstQueueSelect.value = 'support-general';
+    firstQueueSelect.dispatchEvent(new Event('change'));
+
+    const routeNodeB = app.flow().nodes[3];
+    app.selectNode(routeNodeB.id);
+    fixture.detectChanges();
+    const secondQueueSelect = getByTestId('queue-select') as HTMLSelectElement;
+    secondQueueSelect.value = 'sales-priority';
+    secondQueueSelect.dispatchEvent(new Event('change'));
 
     await fixture.whenStable();
     fixture.detectChanges();
 
     const jsonPreview = getByTestId('json-preview')?.textContent ?? '';
 
-    expect(jsonPreview).toContain('"type": "start"');
-    expect(jsonPreview).toContain('"type": "route-to-queue"');
-    expect(jsonPreview).toContain('"queueId": "support-general"');
+    expect(jsonPreview).toContain('"type": "decision"');
+    expect(jsonPreview).toContain('"sourceExitId"');
+    expect(jsonPreview).toContain('"queueId": "sales-priority"');
   });
 
   function getByTestId(testId: string): HTMLElement | null {
@@ -277,6 +460,10 @@ describe('App', () => {
 
     (element as HTMLButtonElement).click();
     fixture.detectChanges();
+  }
+
+  function getSelectedDecisionNode(): DecisionNode {
+    return asDecisionNode(app.selectedNode());
   }
 });
 
@@ -329,6 +516,63 @@ function createFlowWithValidationProblems(): FlowDefinition {
   };
 }
 
+function createFlowWithDecisionValidationProblems(): FlowDefinition {
+  return {
+    nodes: [
+      {
+        id: 'start-1',
+        type: 'start',
+        position: { x: 96, y: 88 },
+        config: {}
+      },
+      {
+        id: 'decision-1',
+        type: 'decision',
+        position: { x: 416, y: 88 },
+        config: {
+          intentPrompt: '',
+          exits: [
+            {
+              id: 'decision-exit-1',
+              label: ''
+            },
+            {
+              id: 'decision-exit-2',
+              label: 'Sales'
+            },
+            {
+              id: 'decision-exit-3',
+              label: 'Sales'
+            }
+          ]
+        }
+      },
+      {
+        id: 'route-1',
+        type: 'route-to-queue',
+        position: { x: 736, y: 88 },
+        config: {
+          queueId: 'support-general',
+          queueName: 'Support General'
+        }
+      }
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        sourceNodeId: 'start-1',
+        targetNodeId: 'decision-1'
+      },
+      {
+        id: 'edge-2',
+        sourceNodeId: 'decision-1',
+        sourceExitId: 'decision-exit-2',
+        targetNodeId: 'route-1'
+      }
+    ]
+  };
+}
+
 function createPointerEvent(
   clientX: number,
   clientY: number,
@@ -347,4 +591,12 @@ function createPointerEvent(
     preventDefault: () => undefined,
     stopPropagation: () => undefined
   };
+}
+
+function asDecisionNode(node: FlowNode | null | undefined): DecisionNode {
+  if (!node || node.type !== 'decision') {
+    throw new Error('Expected decision node.');
+  }
+
+  return node;
 }
